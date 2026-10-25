@@ -1,0 +1,148 @@
+{
+  "nodes": {
+    "home-manager": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792896866,
+        "narHash": "sha256-/0tELNnhdSnP+bHSdWiEe6KpfSwi6WrTnT9cm/jNkjA=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "c216bf5a1f173b0481bd5c8c489ebe5595ecc68c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "linux": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788352401,
+        "narHash": "sha256-c1HGrMdpBVApqjPde1I+0jYO/vXeEtYnExKo+Wf47bI=",
+        "type": "tarball",
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.3.tar.xz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.3.tar.xz"
+      }
+    },
+    "mwifiex-nxp": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1769999705,
+        "narHash": "sha256-P8f4lnBY7zClI6xlQfXF9j342TIbCJ38K89ta61s6xE=",
+        "owner": "nxp-imx",
+        "repo": "mwifiex",
+        "rev": "a5fe4e194bf99315e349d81d77d6dfacec70757a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nxp-imx",
+        "ref": "lf-6.18.2_1.0.0",
+        "repo": "mwifiex",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1792773339,
+        "narHash": "sha256-rZLrzrC6i+jnTAlvPZHogKDulY7WWDEv9hJeHieO7Zw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3ec636362e1816bc2f0888fa0fa2c69f1bc9e504",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "omarchy": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792926166,
+        "narHash": "sha256-MAV43Gqeor6IHbVy6c2aUyCHufPcNIOzfw5YAmHzPPM=",
+        "owner": "basecamp",
+        "repo": "omarchy",
+        "rev": "2fca7fe073e5ef71cd066ddb0d2294ad067deaf5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "basecamp",
+        "repo": "omarchy",
+        "type": "github"
+      }
+    },
+    "ps5-mwifiex": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792451613,
+        "narHash": "sha256-k1TpAuiBgH4uh9bF1fLPREc+yzC6LsbMmfBsjdapUWk=",
+        "owner": "ps5-linux",
+        "repo": "ps5-linux-mwifiex",
+        "rev": "4bce848dd098bf74fbafd0078463da3d9f0d7f80",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ps5-linux",
+        "repo": "ps5-linux-mwifiex",
+        "type": "github"
+      }
+    },
+    "ps5-patches": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792908572,
+        "narHash": "sha256-ReJy9k+33vG0O2MRO41C6eMwjUsUZRcjHJj69jzYRx0=",
+        "owner": "ps5-linux",
+        "repo": "ps5-linux-patches",
+        "rev": "1ec6a4a7e0611c322ea75fcf63284cc5e3dc6f6b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ps5-linux",
+        "repo": "ps5-linux-patches",
+        "type": "github"
+      }
+    },
+    "ps5-tools": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783193097,
+        "narHash": "sha256-eRFxJ2DvPGpPAItAtxUVKUQRjM0zKHrZYWBx54EF7p4=",
+        "owner": "ps5-linux",
+        "repo": "ps5-linux-tools",
+        "rev": "f1fa98a931ca30783b2a91d999cbcba87121ee61",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ps5-linux",
+        "repo": "ps5-linux-tools",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "home-manager": "home-manager",
+        "linux": "linux",
+        "mwifiex-nxp": "mwifiex-nxp",
+        "nixpkgs": "nixpkgs",
+        "omarchy": "omarchy",
+        "ps5-mwifiex": "ps5-mwifiex",
+        "ps5-patches": "ps5-patches",
+        "ps5-tools": "ps5-tools"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
