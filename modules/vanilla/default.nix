@@ -69,12 +69,6 @@ in
 
   config = lib.mkMerge [
     (lib.mkIf cfg.generationPicker {
-      assertions = [
-        {
-          assertion = config.boot.initrd.systemd.enable;
-          message = "alloy.vanilla.generationPicker runs in the systemd initrd (boot.initrd.systemd.enable).";
-        }
-      ];
       # The initrd gets the listed paths and their libraries, not the full Nix
       # closure, so every tool the picker calls is listed.
       boot.initrd.systemd.storePaths = [
