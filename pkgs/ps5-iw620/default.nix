@@ -4,6 +4,7 @@
 {
   lib,
   stdenv,
+  buildPackages,
   kernel,
   kernelModuleMakeFlags ? [ ],
   src, # nxp-imx/mwifiex at the tag install.sh names (REF=)
@@ -33,7 +34,7 @@ stdenv.mkDerivation {
 
   patches = map (p: "${ps5Patches}/${p}") patchNames;
 
-  nativeBuildInputs = kernel.moduleBuildDependencies;
+  nativeBuildInputs = kernel.moduleBuildDependencies ++ [ buildPackages.kmodigest ];
 
   buildPhase = ''
     runHook preBuild
@@ -45,7 +46,12 @@ stdenv.mkDerivation {
 
   installPhase = ''
     runHook preInstall
-    install -Dm644 mlan.ko moal.ko -t $out/lib/modules/${kernel.modDirVersion}/extra/ps5-iw620
+    dir=$out/lib/modules/${kernel.modDirVersion}/extra/ps5-iw620
+    install -Dm644 mlan.ko moal.ko -t $dir
+    # Sign the way Kbuild's modules_install would (cmd_sign), writing the
+    # .ko.cer files the kernel-modules aggregator expects.
+    kmodigest $dir/mlan.ko
+    kmodigest $dir/moal.ko
     runHook postInstall
   '';
 
