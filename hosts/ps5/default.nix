@@ -1,7 +1,7 @@
 # Your PS5. Personal choices go here; the PS5 plumbing is in modules/.
 { pkgs, ... }:
 let
-  user = "ps5"; # change me (and the password below)
+  user = "genr234";
 in
 {
   networking.hostName = "ps5";
@@ -14,7 +14,7 @@ in
   # Desktop mode runs Omarchy's own frontend (modules/omarchy).
   alloy.omarchy = {
     enable = true;
-    # updateFlake = "github:<you>/<repo>#ps5";  # what Omarchy's Update menu rebuilds from
+    updateFlake = "github:genr234/alloy#ps5";  # what Omarchy's Update menu rebuilds from
     # skipPackages = [ "libreoffice-fresh" ];   # leave out Omarchy packages you don't want
   };
 
@@ -27,10 +27,10 @@ in
       "video"
       "render"
     ];
-    initialPassword = "ps5"; # change it with `passwd` after the first boot
+    initialPassword = "playstationfive"; # change it with `passwd` after the first boot
     # Your PC's SSH public key, for nixos-rebuild --target-host (SSH takes keys only).
     openssh.authorizedKeys.keys = [
-      # "ssh-ed25519 AAAA... you@your-pc"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGWhl/Kj5YxVdHCThi5YmYndG2rZ/kWU76iKqOw8AimU riccardocavallaro2020@outlook.it"
     ];
   };
 
@@ -42,10 +42,10 @@ in
   };
 
   # The Cachix cache CI pushes to (see .github/workflows/ci.yml).
-  # alloy.cache = {
-  #   name = "alloy";
-  #   publicKey = "alloy.cachix.org-1:...";
-  # };
+  alloy.cache = {
+    name = "alloy";
+    publicKey = "alloy.cachix.org-1:/daEZJTQBuT6WYzOH6Bm5gqe/Y7TIw1giQ+gSEiiBGk=";
+  };
 
   alloy.modes = {
     inherit user;
