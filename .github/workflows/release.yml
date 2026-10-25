@@ -1,0 +1,43 @@
+# Push a tag like v0.1.0 and this builds alloy.img, compresses it and attaches
+# it to a GitHub release, so a fresh drive can be flashed without building.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+      - name: Free disk space
+        run: ./.github/free-disk-space.sh
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        if: vars.CACHIX_NAME != ''
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build the image
+        run: nix build -L --out-link image .#image
+      - name: Compress
+        run: |
+          for img in image/*.img; do
+            zstd -T0 -19 --long=27 "$img" -o "$(basename "$img").zst"
+          done
+          sha256sum ./*.img.zst > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          [[ "$GITHUB_REF_TYPE" == tag ]] || tag="snapshot-$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          gh release create "$tag" ./*.img.zst SHA256SUMS \
+            --title "$tag" \
+            --notes "Flash with: zstd -d <file>.img.zst --stdout | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"

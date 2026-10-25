@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Print the installed Omarchy version (alloy: the pinned Omarchy release)
+
+omarchy_path=${OMARCHY_PATH:-/usr/share/omarchy}
+version=$(cat "${omarchy_path%/}/version" 2>/dev/null) || exit 1
+echo "$version (alloy)"

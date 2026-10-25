@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Check whether packages are installed (alloy: reads the Nix-built list)
+#
+# On Arch this asks pacman. On alloy the system is built from the flake, and the
+# build writes the Arch names of every Omarchy package it provides to
+# share/omarchy-nix/installed, so menus can still tell what's installed.
+
+list=/run/current-system/sw/share/omarchy-nix/installed
+
+for pkg in "$@"; do
+  [[ $pkg == omarchy || $pkg == omarchy-settings ]] && continue
+  grep -qxF -- "$pkg" "$list" 2>/dev/null || exit 1
+done
+exit 0

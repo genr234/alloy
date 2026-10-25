@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Reset Omarchy user configs and shipped defaults in $HOME (destructive)
+#
+# Upstream replays /etc/skel over $HOME. On alloy the same tree ships in the
+# Omarchy package, and alloy-omarchy-seed copies it with writable permissions.
+
+set -euo pipefail
+
+if ((EUID == 0)); then
+  echo "Error: This script should not be run as root"
+  exit 1
+fi
+
+echo "Resetting Omarchy user configs to shipped defaults..."
+alloy-omarchy-seed --force
+echo "Done. Log out and back in to load everything fresh."

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Update the system (alloy: rebuilds from the flake)
+#
+# On Arch this runs pacman and Omarchy's migrations. On alloy everything,
+# Omarchy included, is pinned in the flake, so an update is a rebuild from it.
+
+set -euo pipefail
+
+flake_file=/etc/alloy/flake
+flake=""
+[[ -r $flake_file ]] && flake=$(<"$flake_file")
+
+if [[ -z $flake ]]; then
+  cat <<'EOF'
+alloy updates come from your flake:
+
+  • On your PC:   nix flake update && nixos-rebuild switch --flake .#ps5 --target-host <user>@<ps5> --ask-sudo-password
+  • Or set alloy.omarchy.updateFlake (e.g. "github:<you>/<repo>#ps5") and this
+    command will rebuild from it directly.
+EOF
+  exit 1
+fi
+
+echo "Updating from $flake ..."
+sudo nixos-rebuild switch --flake "$flake" --refresh
+echo
+echo "Done. If something is wrong: sudo nixos-rebuild switch --rollback"

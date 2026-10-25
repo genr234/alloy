@@ -1,0 +1,28 @@
+# Every Monday: update flake.lock (nixpkgs, Omarchy, PS5 patches, ...) and open
+# a pull request. Nothing reaches the PS5 until you merge it.
+#
+# Note: pull requests opened with the default GITHUB_TOKEN don't start other
+# workflows, so run CI on the PR by hand ("Run workflow" on the CI page), or
+# give this workflow a personal access token in the PAT secret.
+name: Update inputs
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - uses: DeterminateSystems/update-flake-lock@v29
+        with:
+          pr-title: "Update flake inputs"
+          pr-labels: dependencies
+          token: ${{ secrets.PAT || github.token }}

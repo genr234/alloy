@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Install packages (alloy: explains how, since software comes from the flake)
+#
+# Also installed as omarchy-pkg-install, omarchy-pkg-aur-add and
+# omarchy-pkg-aur-install.
+
+missing=()
+for pkg in "$@"; do
+  [[ $pkg == -* ]] && continue
+  omarchy-pkg-present "$pkg" || missing+=("$pkg")
+done
+((${#missing[@]} == 0)) && exit 0
+
+message="alloy installs software from its flake, not pacman. To get ${missing[*]}:
+  • permanently: add it to hosts/ps5/default.nix and rebuild
+  • just to try it: nix shell nixpkgs#<name>"
+
+echo "$message" >&2
+if [[ -n ${WAYLAND_DISPLAY:-} ]] && command -v notify-send >/dev/null; then
+  notify-send -a Omarchy "Not installed: ${missing[*]}" "Add it to your alloy flake and rebuild." || true
+fi
+exit 1

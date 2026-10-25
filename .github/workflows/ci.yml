@@ -1,0 +1,74 @@
+# Every push and pull request: run the checks, then build the whole PS5 system
+# (the kernel included) and push it to the binary cache, so neither your PC nor
+# the PS5 ever has to compile it.
+#
+# Setup (once, in the GitHub repo settings):
+#   Variables: CACHIX_NAME          name of your Cachix cache
+#   Secrets:   CACHIX_AUTH_TOKEN    a write token for that cache
+# Without them CI still checks and builds, it just doesn't upload anything.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Quick checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        if: vars.CACHIX_NAME != ''
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Boot hook, session loop, PS button
+        run: >
+          nix build -L --no-link
+          .#checks.x86_64-linux.install-boot
+          .#checks.x86_64-linux.session-loop
+          .#checks.x86_64-linux.ps-button
+
+  boot-smoke:
+    name: Boot the image in QEMU
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: Free disk space
+        run: ./.github/free-disk-space.sh
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        if: vars.CACHIX_NAME != ''
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build an image with a stock kernel and boot it
+        run: nix build -L --no-link .#checks.x86_64-linux.boot-smoke
+
+  system:
+    name: Build the PS5 system
+    runs-on: ubuntu-latest
+    timeout-minutes: 360 # the first kernel build is the slow part
+    steps:
+      - uses: actions/checkout@v7
+      - name: Free disk space
+        run: ./.github/free-disk-space.sh
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        if: vars.CACHIX_NAME != ''
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build the kernel
+        run: nix build -L --no-link .#kernel
+      - name: Build the full system
+        run: nix build -L --no-link .#nixosConfigurations.ps5.config.system.build.toplevel

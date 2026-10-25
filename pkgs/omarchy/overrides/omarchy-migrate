@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Run pending migrations (alloy: marks them done)
+#
+# Omarchy's migrations are Arch upgrade steps (pacman installs, file moves in
+# /etc, bootloader changes). On alloy the flake describes the whole system, so
+# they're marked as done instead of run. To pick up new Omarchy defaults in
+# your own configs, use omarchy-reinstall-configs.
+
+state="$HOME/.local/state/omarchy/migrations"
+mkdir -p "$state"
+for migration in "${OMARCHY_PATH:-/usr/share/omarchy}"/migrations/*.sh; do
+  [[ -f $migration ]] && touch "$state/$(basename "$migration")"
+done
+exit 0

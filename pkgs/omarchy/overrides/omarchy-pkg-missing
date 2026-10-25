@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Succeed if any of the packages is missing (alloy: reads the Nix-built list)
+
+for pkg in "$@"; do
+  omarchy-pkg-present "$pkg" || exit 0
+done
+exit 1
