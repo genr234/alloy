@@ -17,6 +17,7 @@ set -euo pipefail
 
 repo="${ALLOY_REPO:-genr234/alloy}"
 image=""
+parts=()
 build=""
 release=""
 device=""
@@ -101,28 +102,45 @@ elif [[ -z $image ]]; then
   say "fetching the checksum list from ${release:-the latest release}..."
   curl -fsSL "$base/SHA256SUMS" -o "$work/SHA256SUMS" ||
     die "no release found at $base. Make one (push a v* tag, or run the Release workflow), or use --build."
-  file="$(awk '{sub(/^\.?\//, "", $2); print $2; exit}' "$work/SHA256SUMS")"
-  want="$(awk '{print $1; exit}' "$work/SHA256SUMS")"
-  image="$work/$file"
-  if [[ -f $image ]] && [[ "$(sha256 "$image")" == "$want" ]]; then
-    say "already downloaded $file"
-  else
+  # One line per file: the image, or its numbered parts (alloy.img.zst.part00,
+  # ...) when it's over GitHub's 2 GiB limit for a release file.
+  parts=()
+  while read -r want file; do
+    file="${file#./}"
+    parts+=("$work/$file")
+    if [[ -f $work/$file ]] && [[ "$(sha256 "$work/$file")" == "$want" ]]; then
+      say "already downloaded $file"
+      continue
+    fi
     say "downloading $file..."
-    curl -fL --progress-bar "$base/$file" -o "$image.part"
-    mv "$image.part" "$image"
-    say "checking the download..."
-    [[ "$(sha256 "$image")" == "$want" ]] || {
-      rm -f "$image"
+    curl -fL --progress-bar "$base/$file" -o "$work/$file.download"
+    mv "$work/$file.download" "$work/$file"
+    say "checking $file..."
+    [[ "$(sha256 "$work/$file")" == "$want" ]] || {
+      rm -f "$work/$file"
       die "checksum mismatch for $file; run the installer again"
     }
-  fi
+  done <"$work/SHA256SUMS"
+  ((${#parts[@]})) || die "the release's SHA256SUMS lists no files"
+  first="${parts[0]}"
+  image="${first%.part[0-9][0-9]}"
 fi
 
-[[ -f $image ]] || die "image not found: $image"
+((${#parts[@]})) || parts=("$image") # --image and --build give one file
+for f in "${parts[@]}"; do
+  [[ -f $f ]] || die "image not found: $f"
+done
 case "$image" in
-  *.zst) need zstd "$zstd_hint"; reader=(zstd -dc "$image") ;;
-  *) reader=(cat "$image") ;;
+  *.zst) need zstd "$zstd_hint" ;;
 esac
+
+# The image as one stream: the parts joined, then decompressed.
+read_image() {
+  case "$image" in
+    *.zst) cat "${parts[@]}" | zstd -dc ;;
+    *) cat "${parts[@]}" ;;
+  esac
+}
 
 # --- 2. The drive -------------------------------------------------------------
 
@@ -193,7 +211,7 @@ if dd if=/dev/zero of=/dev/null count=0 status=progress 2>/dev/null; then
 fi
 
 say "writing (this takes a few minutes)..."
-"${reader[@]}" | sudo dd of="$target" bs="$bs" "${progress[@]}"
+read_image | sudo dd of="$target" bs="$bs" "${progress[@]}"
 sync
 
 if [[ $os == Darwin ]]; then

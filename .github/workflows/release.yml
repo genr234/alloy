@@ -34,13 +34,20 @@ jobs:
           for img in image/*.img; do
             zstd -T0 -19 --long=27 "$img" -o "$(basename "$img").zst"
           done
-          sha256sum ./*.img.zst > SHA256SUMS
+          # Release assets must be under 2 GiB each: split the image into
+          # numbered parts (alloy.img.zst.part00, ...). install.sh joins them.
+          for z in ./*.img.zst; do
+            split -b 1900M -d -a 2 "$z" "$z.part"
+            rm "$z"
+          done
+          sha256sum ./*.img.zst.part* > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${GITHUB_REF_NAME}"
           [[ "$GITHUB_REF_TYPE" == tag ]] || tag="snapshot-$(date +%Y%m%d)-${GITHUB_SHA::7}"
-          gh release create "$tag" ./*.img.zst SHA256SUMS \
+          gh release create "$tag" ./*.img.zst.part* SHA256SUMS \
             --title "$tag" \
-            --notes "Flash with: zstd -d <file>.img.zst --stdout | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+            --notes "Flash with: curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/install.sh | bash
+          Or by hand, after downloading every part: cat alloy.img.zst.part* | zstd -d | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"

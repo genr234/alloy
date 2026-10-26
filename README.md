@@ -22,9 +22,11 @@ Options go after `bash -s --`, for example
 - `--release TAG` picks a release other than the latest
 - `--device DEV` skips the drive menu (it still asks before erasing)
 
-On Windows, download `alloy.img.zst` from the
-[releases](https://github.com/genr234/alloy/releases) and flash it with
-balenaEtcher or Rufus.
+On Windows, download every `alloy.img.zst.partNN` file from the
+[releases](https://github.com/genr234/alloy/releases) (the image is split
+because GitHub limits release files to 2 GiB), join them with
+`copy /b alloy.img.zst.part* alloy.img.zst`, decompress that with zstd and
+flash the resulting `alloy.img` with balenaEtcher or Rufus.
 
 New releases come from the Release workflow: push a `v*` tag, or run it by hand
 from the Actions tab.
