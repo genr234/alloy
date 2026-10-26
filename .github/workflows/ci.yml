@@ -30,9 +30,9 @@ jobs:
         with:
           name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          # Disk images are huge and quick to rebuild from the cached parts;
-          # pushing them would fill the cache and evict the kernel.
-          pushFilter: '(-ext4-fs\.img|-ps5-image)$'
+          # Disk images and the patched kernel source are huge and never needed
+          # once the kernel is cached; pushing them would fill the cache.
+          pushFilter: '(-ext4-fs\.img|-ps5-image|-linux-ps5-src-[0-9.]+)$'
       - name: Boot hook, session loop, PS button
         run: >
           nix build -L --no-link
@@ -54,9 +54,9 @@ jobs:
         with:
           name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          # Disk images are huge and quick to rebuild from the cached parts;
-          # pushing them would fill the cache and evict the kernel.
-          pushFilter: '(-ext4-fs\.img|-ps5-image)$'
+          # Disk images and the patched kernel source are huge and never needed
+          # once the kernel is cached; pushing them would fill the cache.
+          pushFilter: '(-ext4-fs\.img|-ps5-image|-linux-ps5-src-[0-9.]+)$'
       - name: Build an image with a stock kernel and boot it
         run: nix build -L --no-link .#checks.x86_64-linux.boot-smoke
 
@@ -74,9 +74,9 @@ jobs:
         with:
           name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          # Disk images are huge and quick to rebuild from the cached parts;
-          # pushing them would fill the cache and evict the kernel.
-          pushFilter: '(-ext4-fs\.img|-ps5-image)$'
+          # Disk images and the patched kernel source are huge and never needed
+          # once the kernel is cached; pushing them would fill the cache.
+          pushFilter: '(-ext4-fs\.img|-ps5-image|-linux-ps5-src-[0-9.]+)$'
       - name: Build the kernel
         run: nix build -L --no-link .#kernel
       - name: Build the full system
