@@ -59,7 +59,7 @@ done
 os="$(uname -s)"
 case "$os" in
   Linux | Darwin) ;;
-  *) die "this installer runs on Linux or macOS; on Windows, flash the release's alloy.img.zst with Rufus or balenaEtcher" ;;
+  *) die "this installer runs on Linux or macOS; on Windows, join the release's alloy.img.zst.* parts (see the README) and flash alloy.img.zst with Rufus or balenaEtcher" ;;
 esac
 
 if [[ $os == Darwin ]]; then
@@ -104,17 +104,39 @@ elif [[ -z $image ]]; then
   file="$(awk '{sub(/^\.?\//, "", $2); print $2; exit}' "$work/SHA256SUMS")"
   want="$(awk '{print $1; exit}' "$work/SHA256SUMS")"
   image="$work/$file"
+  # Images over GitHub's 2 GiB asset limit are released in parts
+  # ($file.00, $file.01, ...), listed after the first line of SHA256SUMS.
+  parts="$(awk -v f="$file" 'NR > 1 {sub(/^\.?\//, "", $2); if (index($2, f ".") == 1) print $1, $2}' "$work/SHA256SUMS")"
   if [[ -f $image ]] && [[ "$(sha256 "$image")" == "$want" ]]; then
     say "already downloaded $file"
   else
-    say "downloading $file..."
-    curl -fL --progress-bar "$base/$file" -o "$image.part"
+    if [[ -n $parts ]]; then
+      : >"$image.part"
+      while read -r part_sum part; do
+        # Parts that already check out are kept, so a broken download resumes.
+        if ! [[ -f "$work/$part" && "$(sha256 "$work/$part")" == "$part_sum" ]]; then
+          say "downloading $part..."
+          curl -fL --progress-bar "$base/$part" -o "$work/$part"
+          [[ "$(sha256 "$work/$part")" == "$part_sum" ]] || {
+            rm -f "$work/$part"
+            die "checksum mismatch for $part; run the installer again"
+          }
+        fi
+        cat "$work/$part" >>"$image.part"
+      done <<<"$parts"
+    else
+      say "downloading $file..."
+      curl -fL --progress-bar "$base/$file" -o "$image.part"
+    fi
     mv "$image.part" "$image"
     say "checking the download..."
     [[ "$(sha256 "$image")" == "$want" ]] || {
       rm -f "$image"
       die "checksum mismatch for $file; run the installer again"
     }
+    while read -r _ part; do
+      [[ -z $part ]] || rm -f "$work/$part"
+    done <<<"$parts"
   fi
 fi
 

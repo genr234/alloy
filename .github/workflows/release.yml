@@ -35,12 +35,23 @@ jobs:
             zstd -T0 -19 --long=27 "$img" -o "$(basename "$img").zst"
           done
           sha256sum ./*.img.zst > SHA256SUMS
+      # Release assets must be under 2 GiB, so each image goes up in parts
+      # (alloy.img.zst.00, .01, ...). SHA256SUMS keeps the whole file's sum on
+      # its first line, then one line per part; install.sh joins them.
+      - name: Split
+        run: |
+          for zst in ./*.img.zst; do
+            split -b 1900M -d -a 2 "$zst" "$zst."
+            rm "$zst"
+          done
+          sha256sum ./*.img.zst.[0-9][0-9] >> SHA256SUMS
+          cat SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${GITHUB_REF_NAME}"
           [[ "$GITHUB_REF_TYPE" == tag ]] || tag="snapshot-$(date +%Y%m%d)-${GITHUB_SHA::7}"
-          gh release create "$tag" ./*.img.zst SHA256SUMS \
+          gh release create "$tag" ./*.img.zst.[0-9][0-9] SHA256SUMS \
             --title "$tag" \
-            --notes "Flash with: zstd -d <file>.img.zst --stdout | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
+            --notes "Flash with: cat alloy.img.zst.* | zstd -d | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync"
