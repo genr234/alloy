@@ -279,6 +279,7 @@ in
       pkgs.xdg-user-dirs
       pkgs.xdg-utils
       pkgs.libnotify # notify-send
+      pkgs.gtk3 # gtk-launch, which the app launcher starts every app with
       pkgs.gum
       (pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; })
       (pkgs.python3.withPackages (p: [
