@@ -8,6 +8,8 @@ in
   # Time zone: Omarchy sets it automatically. To pin one instead:
   # time.timeZone = "Europe/London";
   i18n.defaultLocale = "en_US.UTF-8";
+  # Text console. The desktop layout is the user's own Hyprland setting.
+  console.keyMap = "it";
 
   nixpkgs.config.allowUnfree = true; # Steam, plus a few Omarchy apps (Obsidian, Spotify)
 
