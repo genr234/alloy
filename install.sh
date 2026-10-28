@@ -83,13 +83,16 @@ mkdir -p "$work"
 
 if [[ -n $build ]]; then
   need nix "Install Nix (https://nixos.org/download) or drop --build to download a release."
+  # The image is an x86_64-linux build; on a Mac, Nix needs a Linux builder
+  # (nix.linux-builder, or Determinate Nix's native one) to make it.
+  [[ $os == Darwin ]] && say "on macOS this needs a Linux builder configured in Nix; without one, drop --build"
   say "building $repo#image (the kernel comes from the alloy cache when CI has pushed it)..."
   # The cache options only take effect for trusted Nix users; otherwise the
   # kernel is compiled locally (about an hour).
   out="$(nix --extra-experimental-features 'nix-command flakes' build --no-link --print-out-paths \
     --option extra-substituters https://alloy.cachix.org \
     --option extra-trusted-public-keys alloy.cachix.org-1:/daEZJTQBuT6WYzOH6Bm5gqe/Y7TIw1giQ+gSEiiBGk= \
-    "github:$repo#image")"
+    "github:$repo#packages.x86_64-linux.image")"
   image="$(echo "$out"/*.img)"
 elif [[ -z $image ]]; then
   need curl ""
@@ -215,7 +218,8 @@ if dd if=/dev/zero of=/dev/null count=0 status=progress 2>/dev/null; then
 fi
 
 say "writing (this takes a few minutes)..."
-"${reader[@]}" | sudo dd of="$target" bs="$bs" "${progress[@]}"
+# ${a[@]+...}: macOS's bash 3.2 calls an empty array unbound under set -u.
+"${reader[@]}" | sudo dd of="$target" bs="$bs" ${progress[@]+"${progress[@]}"}
 sync
 
 if [[ $os == Darwin ]]; then
