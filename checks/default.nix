@@ -195,6 +195,7 @@ in
         cat > fakebin/hyprctl <<EOF
         #!/usr/bin/env bash
         echo "hyprctl \$*" >> $PWD/hyprctl.log
+        [ -z "\''${HYPRCTL_REPLY:-}" ] || echo "\$HYPRCTL_REPLY"
         EOF
         cat > fakebin/logger <<EOF
         #!/usr/bin/env bash
@@ -234,7 +235,13 @@ in
         rm -f $state/*
         ALLOY_MODE=desktop ${bashScript "$mode"} game
         grep -qx game $state/next-mode
+        grep -qx "hyprctl dispatch hl.dsp.exit()" hyprctl.log
         grep -qx "hyprctl dispatch exit" hyprctl.log
+
+        # With a Lua config, the Lua dispatch is enough.
+        rm -f $state/* hyprctl.log
+        ALLOY_MODE=desktop HYPRCTL_REPLY=ok ${bashScript "$mode"} game
+        test "$(cat hyprctl.log)" = "hyprctl dispatch hl.dsp.exit()"
 
         rm -f $state/*
         ALLOY_MODE=game ${bashScript "$mode"} desktop

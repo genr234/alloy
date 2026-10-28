@@ -25,7 +25,11 @@ printf '%s\n' "$target" >"$state/next-mode"
 
 case "${ALLOY_MODE:-}" in
   desktop)
-    hyprctl dispatch exit >/dev/null
+    # A Lua config (Omarchy) takes a Lua expression and answers "ok"; a
+    # hyprlang config (plain Hyprland) only knows the old dispatcher name.
+    if [[ "$(hyprctl dispatch 'hl.dsp.exit()' 2>/dev/null)" != ok ]]; then
+      hyprctl dispatch exit >/dev/null
+    fi
     ;;
   game)
     touch "$state/end-request"
