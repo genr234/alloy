@@ -33,6 +33,10 @@ in
     "mitigations=off"
     "idle=halt"
     "preempt=full"
+    # USB never sleeps: the boot drive, controllers and dongles otherwise get
+    # suspended (this kernel's default is 2 s), the most common cause of
+    # disconnects and freezes in ps5-bazzite-deck's reports.
+    "usbcore.autosuspend=-1"
   ]
   ++ lib.optional (cfg.videoMode != null) "video=DP-1:${cfg.videoMode}";
 
@@ -60,7 +64,16 @@ in
     AllowSuspendThenHibernate=no
   '';
 
-  hardware.bluetooth.enable = true;
+  # Keep the Bluetooth chips (IW620 1286:2059, MediaTek 0e8d:3603) and the
+  # Salina xHCI (104d:9108) out of runtime suspend, whatever the default
+  # above: the chips drop off USB in U3 until a power-off, and the xHCI's
+  # setup doesn't survive D3 (found by Dasloh, via ps5-bazzite-deck).
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1286", ATTR{idProduct}=="2059", TEST=="power/control", ATTR{power/control}="on"
+    ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0e8d", ATTR{idProduct}=="3603", TEST=="power/control", ATTR{power/control}="on"
+    ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x104d", ATTR{device}=="0x9108", TEST=="power/control", ATTR{power/control}="on"
+  '';
+
   networking.networkmanager.enable = true;
   services.pipewire = {
     enable = true;
