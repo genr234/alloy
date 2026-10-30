@@ -35,3 +35,51 @@ List every part the release has, in order.
 
 New releases come from the Release workflow: push a `v*` tag, or run it by hand
 from the Actions tab.
+
+## Game mode
+
+Press Super+G, pick Game Mode in the menu, or hold PS on a controller to get
+Steam Big Picture. Steam's Power menu takes you back to the desktop, or shuts
+down and restarts the console.
+
+### Rest mode
+
+The PS5 can't suspend under Linux, so rest mode does the next best thing: the
+screen turns off and boost turns off, while Steam keeps downloading (and so do
+Decky plugins such as Tender). Press PS, or switch a controller back on, to wake
+it up into game mode.
+
+- Start it from the Alloy panel in Steam's Quick Access menu (the `...`
+  button), from Rest Mode in the desktop menu, or with `alloy-mode rest`.
+- Game mode goes into rest by itself after 30 minutes without controller input,
+  but never while a game is running.
+- When every download is done (the network stays quiet for 10 minutes), the
+  console shuts down.
+
+Rest mode closes the game that's running, since the PS5 can't pause it. The
+Alloy panel can switch auto-rest and the shutdown off;
+`alloy.modes.rest` in `hosts/ps5` sets the defaults.
+
+### Decky plugins
+
+Decky Loader adds plugins to the Quick Access menu. Alloy installs its own
+panel. Install the others once from Decky's settings (the gear in the Decky
+tab):
+
+- **Tender**: your RomM library inside Steam, with downloads, BIOS files and
+  save sync. Needs RomM 5.3 or newer. Turn on Developer mode, then go to
+  Developer, choose Install Plugin from URL, and paste the latest zip from
+  [romm-tender's releases](https://github.com/danielcopper/romm-tender/releases).
+  Games launch through RetroDECK, which Alloy installs from Flathub in the
+  background on first boot.
+- **Decky Framegen**: OptiScaler per game, from the Decky store. Use it for
+  FSR 4 (pick the *Valve RDNA2 Compatibility* runtime on the PS5), FSR 3.1
+  frame generation and XeSS. Add the launch option it gives you to each game
+  you want it on.
+- **lsfg-vk**: Lossless Scaling frame generation for almost any game, from the
+  Decky store. Needs Lossless Scaling on Steam: buy it, set its beta branch to
+  `lsfg-vk` (Properties > Betas), then press Install in the plugin. It doesn't
+  work with VRR, and can clash with the performance overlay.
+
+Steam's own scaling filter (FSR 1, NIS, integer, per game) is under
+Performance in the Quick Access menu.

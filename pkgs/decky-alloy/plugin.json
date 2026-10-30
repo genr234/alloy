@@ -1,0 +1,11 @@
+{
+  "name": "Alloy",
+  "author": "Alloy",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["alloy"],
+    "description": "Rest mode and PS5 boost for Alloy.",
+    "image": ""
+  }
+}

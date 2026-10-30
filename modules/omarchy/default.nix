@@ -173,6 +173,7 @@ let
     inherit src extraLua;
     installedPackages = installedNames;
     gameModeMenuEntry = modes.enable;
+    restModeMenuEntry = modes.enable && modes.rest.enable;
   };
 
   seed = pkgs.writeShellApplication {

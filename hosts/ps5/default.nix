@@ -16,7 +16,7 @@ in
   # Desktop mode runs Omarchy's own frontend (modules/omarchy).
   alloy.omarchy = {
     enable = true;
-    updateFlake = "github:genr234/alloy#ps5";  # what Omarchy's Update menu rebuilds from
+    updateFlake = "github:genr234/alloy#ps5"; # what Omarchy's Update menu rebuilds from
     # skipPackages = [ "libreoffice-fresh" ];   # leave out Omarchy packages you don't want
   };
 
@@ -57,6 +57,10 @@ in
     # game.radvNoHiz = true;              # if games show graphical glitches
     # game.performanceOverlay = true;     # Steam's overlay via MangoHud (default)
     # game.protonGE = true;               # GE-Proton in Steam (default)
+    # game.decky.enable = true;           # Decky Loader + the Alloy panel (default)
+    # game.retrodeck = true;              # RetroDECK from Flathub, for Tender (default)
+    # rest.autoRestMinutes = 30;          # rest after 30 min idle, 0 = never (default)
+    # rest.shutdownWhenDone = true;       # power off once downloads finish (default)
   };
 
   # The VanillaOS layer (defaults shown).

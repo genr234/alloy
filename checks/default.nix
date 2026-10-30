@@ -2,7 +2,11 @@
 #
 #   install-boot  the boot hook: install, no-op reinstall, rotation to *.old, limits
 #   session-loop  mode switching logic of alloy-session and alloy-mode
-#   ps-button     the PS-button hold detection
+#   steam-sessions
+#                 the game and rest sessions with stand-in Steam and gamescope:
+#                 Power menu, Decky, idle watcher, rest mode's shutdown when
+#                 downloads finish and its wake-up
+#   ps-button     the PS-button hold detection, idle timer and game detection
 #   omarchy-first-login
 #                 Omarchy's own first-login setup, theme switch and config reset
 #                 on the packaged Omarchy
@@ -123,7 +127,8 @@ in
 
     grep -q 'alloy-mode game' $share/default/hypr/alloy.lua
     grep -q '"system.gamemode"' $share/default/omarchy/omarchy-menu.jsonc
-    echo "game mode key and menu entry: ok"
+    grep -q '"system.restmode"' $share/default/omarchy/omarchy-menu.jsonc
+    echo "game mode key, game and rest menu entries: ok"
     touch $out
   '';
 
@@ -184,7 +189,7 @@ in
         #!/usr/bin/env bash
         shift; exec "$@"
         EOF
-        for m in desktop game; do
+        for m in desktop game rest; do
           cat > fakebin/alloy-$m-session <<EOF
         #!/usr/bin/env bash
         echo $m >> $PWD/ran
@@ -232,6 +237,21 @@ in
         grep -q "keep exiting" err
         echo "crash-loop guard: ok"
 
+        # Rest mode wakes into game mode, and leaving that lands on the desktop.
+        rm ran; printf '%s\n' rest game exit shell > plan
+        ${bashScript ../modules/modes/scripts/alloy-session.sh}
+        test "$(tr '\n' ' ' < ran)" = "desktop rest game desktop "
+        echo "desktop -> rest -> (PS) game -> desktop: ok"
+
+        # A game mode that dies right away falls back to the desktop, even
+        # when game mode is the default.
+        rm ran; printf '%s\n' exit shell > plan
+        ALLOY_DEFAULT_MODE=game ALLOY_QUICK_EXIT_SECONDS=15 \
+          ${bashScript ../modules/modes/scripts/alloy-session.sh} 2>err
+        test "$(tr '\n' ' ' < ran)" = "game desktop "
+        grep -q "falling back to the desktop" err
+        echo "broken game mode falls back to the desktop: ok"
+
         rm -f $state/*
         ALLOY_MODE=desktop ${bashScript "$mode"} game
         grep -qx game $state/next-mode
@@ -248,6 +268,22 @@ in
         grep -qx desktop $state/next-mode
         test -e $state/end-request
 
+        rm -f $state/*
+        ALLOY_MODE=game ${bashScript "$mode"} rest
+        grep -qx rest $state/next-mode
+        test -e $state/end-request
+
+        rm -f $state/*
+        ALLOY_MODE=rest ${bashScript "$mode"} game
+        grep -qx game $state/next-mode
+        test -e $state/end-request
+
+        # The Alloy Decky panel runs outside the session, like Steam's sandbox.
+        rm -f $state/*; touch $state/game-active
+        env -u ALLOY_MODE ${bashScript "$mode"} rest
+        grep -qx rest $state/next-mode
+        test -e $state/end-request
+
         # From inside Steam's sandbox ALLOY_MODE may be missing.
         rm -f $state/*; touch $state/game-active
         env -u ALLOY_MODE ${bashScript ../modules/modes/scripts/steamos-session-select.sh} plasma
@@ -258,6 +294,95 @@ in
         echo "alloy-mode / steamos-session-select: ok"
         touch $out
       '';
+
+  steam-sessions =
+    let
+      session =
+        name:
+        pkgs.writeText "alloy-${name}" (
+          builtins.readFile ../modules/modes/scripts/steam.sh
+          + builtins.readFile ../modules/modes/scripts/alloy-${name}.sh
+        );
+    in
+    pkgs.runCommand "alloy-check-steam-sessions" { nativeBuildInputs = [ pkgs.coreutils ]; } ''
+      set -euo pipefail
+      export HOME=$PWD/home XDG_STATE_HOME=$PWD/state PATH=$PWD/fakebin:$PATH
+      state=$XDG_STATE_HOME/alloy
+      mkdir -p fakebin "$HOME" net/lo/statistics net/eth0/statistics
+      echo 0 > net/lo/statistics/rx_bytes; echo 0 > net/eth0/statistics/rx_bytes
+
+      # Stand-ins: gamescope "runs" until Steam is told to shut down.
+      cat > fakebin/gamescope <<EOF
+      #!${pkgs.bash}/bin/bash
+      echo "gamescope \$*" >> $PWD/calls
+      echo \$\$ > $PWD/gamescope.pid
+      [ -z "\''${FAKE_POWER_MENU:-}" ] || { touch "\$FAKE_POWER_MENU"; exit 0; }
+      exec sleep 1000
+      EOF
+      cat > fakebin/steam <<EOF
+      #!${pkgs.bash}/bin/bash
+      echo "steam \$*" >> $PWD/calls
+      [ "\$1" != -shutdown ] || kill \$(cat $PWD/gamescope.pid)
+      EOF
+      for cmd in systemctl alloy-ps-button; do
+        cat > fakebin/$cmd <<EOF
+      #!${pkgs.bash}/bin/bash
+      echo "$cmd \$*" >> $PWD/calls
+      [ $cmd != alloy-ps-button ] || exec sleep 1000
+      EOF
+      done
+      chmod +x fakebin/*
+
+      common="ALLOY_STEAM_ARGS=-gamepadui ALLOY_PERFORMANCE=1 ALLOY_DECKY=1"
+      rest() {
+        env $common ALLOY_NET_DIR=$PWD/net ALLOY_REST_SAMPLE_SECONDS=1 \
+          ALLOY_REST_QUIET_MINUTES=2 ALLOY_REST_QUIET_KIBPS=64 ALLOY_REST_SHUTDOWN=1 \
+          ${pkgs.bash}/bin/bash -euo pipefail ${session "rest-session"}
+      }
+
+      # Rest: display off, headless Steam, PS watcher; once the network stays
+      # quiet, Steam is shut down and so is the console.
+      rest
+      grep -qx "systemctl start alloy-display-off.service" calls
+      grep -qx "gamescope --backend headless -- steam -gamepadui" calls
+      grep -qx "alloy-ps-button --hold 0 --wake-on-connect" calls
+      grep -qx "steam -shutdown" calls
+      test "$(tail -n2 calls | tr '\n' ' ')" = "systemctl poweroff systemctl stop alloy-display-off.service "
+      test -e home/.local/share/Steam/.cef-enable-remote-debugging
+      test ! -e $state/rest-active
+      echo "rest: display off, quiet network, power off: ok"
+
+      # Busy network: no shutdown; pressing PS (end-request) leaves rest mode.
+      rm calls
+      (for i in $(seq 40); do echo $((i * 10000000)) > net/eth0/statistics/rx_bytes; sleep 0.25; done) &
+      (sleep 5; touch $state/end-request) &
+      rest
+      wait
+      if grep -q poweroff calls; then exit 1; fi
+      grep -qx "systemctl stop alloy-display-off.service" calls
+      echo "rest: downloads keep it awake, PS wakes it: ok"
+
+      # Shutdown switched off in the Alloy panel: quiet network, still resting.
+      rm calls; echo off > $state/shutdown-when-done
+      (sleep 5; touch $state/end-request) &
+      rest
+      wait
+      if grep -q poweroff calls; then exit 1; fi
+      echo "rest: 'shut down when downloads finish' off: ok"
+
+      # Game: boost, idle watcher, Decky, and Steam's Power menu shutting down.
+      rm calls
+      env $common ALLOY_GAMESCOPE_ARGS="--backend drm" ALLOY_AUTO_REST_MINUTES=30 \
+        FAKE_POWER_MENU=$state/steam-shutdown \
+        ${pkgs.bash}/bin/bash -euo pipefail ${session "game-session"}
+      grep -qx "systemctl start alloy-game-performance.service" calls
+      grep -qx "alloy-ps-button --target none --idle-minutes 30" calls
+      grep -qx "systemctl stop alloy-game-performance.service" calls
+      grep -qx "systemctl poweroff" calls
+      test ! -e $state/steam-shutdown
+      echo "game: boost, idle watcher, Power menu shutdown: ok"
+      touch $out
+    '';
 
   ps-button =
     let
@@ -278,7 +403,31 @@ in
       assert not d.poll(25.0)          # a tap never fires
       d.press(30.0)
       assert d.poll(31.5)              # next long press fires again
+      w = ps_button.HoldDetector(0)
+      w.press(40.0)
+      assert w.poll(40.0)              # rest mode: any press wakes
       print("hold detection: ok")
+
+      t = ps_button.IdleTimer(60, 0.0)
+      assert not t.poll(59.0)
+      t.touch(50.0)                    # input restarts the count
+      assert not t.poll(100.0) and t.due_in(100.0) == 10.0
+      assert t.poll(110.0)             # idle for 60s: fire
+      assert not t.poll(111.0)         # and start over
+      print("idle timer: ok")
+
+      import os
+      for pid, cmd in [("1", b"init"), ("42", b"reaper\0SteamLaunch\0AppId=1"),
+                       ("self", b"x")]:
+          os.makedirs(f"proc/{pid}")
+          open(f"proc/{pid}/cmdline", "wb").write(cmd)
+      assert ps_button.game_running("proc")
+      os.remove("proc/42/cmdline")
+      assert not ps_button.game_running("proc")
+      print("game detection: ok")
+
+      a = ps_button.parse_args(["--target", "none", "--idle-minutes", "30"])
+      assert a.target == "none" and a.idle_minutes == 30
       EOF
       touch $out
     '';
