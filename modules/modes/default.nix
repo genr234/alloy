@@ -1,8 +1,12 @@
-# Desktop mode (Hyprland) and game mode (Steam Big Picture in gamescope).
+# Desktop mode (Hyprland), game mode (Steam Big Picture in gamescope) and
+# rest mode (screen off, downloads keep going: the PS5 can't suspend).
 #
 #   boot -> tty1 autologin -> alloy-session loop
 #                               |- desktop (default)  -- game key / "Game Mode" / hold PS -->  game
-#                               '- game               -- Steam: Switch to Desktop / quit  -->  desktop
+#                               |- game               -- Steam: Switch to Desktop / quit  -->  desktop
+#                               |                     -- Alloy panel / 30 min idle        -->  rest
+#                               '- rest               -- press PS / controller on         -->  game
+#                                                     -- downloads done                   -->  power off
 #
 # The loop starts the default mode unless `alloy-mode` asked for another one,
 # so every boot, and every way of leaving Steam, ends up on the desktop.
@@ -28,6 +32,32 @@ let
       // extra
     );
 
+  # The game and rest sessions share the Steam helpers in steam.sh.
+  steamScript =
+    name: extra:
+    script name (
+      {
+        text = builtins.readFile ./scripts/steam.sh + builtins.readFile ./scripts/${name}.sh;
+      }
+      // extra
+    );
+
+  ps-button-daemon = pkgs.writers.writePython3Bin "alloy-ps-button-daemon" {
+    libraries = [ pkgs.python3Packages.evdev ];
+  } (builtins.readFile ./scripts/ps-button.py);
+
+  ps-button = pkgs.writeShellApplication {
+    name = "alloy-ps-button";
+    runtimeInputs = [
+      alloy-mode
+      pkgs.systemd
+    ];
+    runtimeEnv.ALLOY_PS_HOLD_SECONDS = toString cfg.psButton.holdSeconds;
+    # Log to the journal (journalctl -t alloy-ps-button) so the boot report can
+    # show which controllers it saw.
+    text = ''exec systemd-cat --identifier=alloy-ps-button ${lib.getExe ps-button-daemon} "$@"'';
+  };
+
   alloy-mode = script "alloy-mode" {
     runtimeInputs = [
       pkgs.coreutils
@@ -44,6 +74,27 @@ let
     ALLOY_PERFORMANCE = if performance then "1" else "0";
   };
 
+  # What SteamOS's gamescope-session tells Steam, minus what the PS5 can't do
+  # (HDR, VRR and tearing all stop at its DP-to-HDMI bridge). Mostly this
+  # unlocks Quick Access menu features: the scaling filter (FSR / NIS /
+  # integer, per game), the performance overlay levels and the volume keys.
+  steamEnv = {
+    STEAM_GAMESCOPE_NIS_SUPPORTED = "1";
+    STEAM_GAMESCOPE_FANCY_SCALING_SUPPORT = "1";
+    STEAM_MULTIPLE_XWAYLANDS = "1";
+    STEAM_ENABLE_VOLUME_HANDLER = "1";
+    SRT_URLOPEN_PREFER_STEAM = "1";
+    QT_IM_MODULE = "steam";
+    GTK_IM_MODULE = "Steam";
+    ALLOY_DECKY = if cfg.game.decky.enable then "1" else "0";
+  }
+  // lib.optionalAttrs cfg.game.performanceOverlay {
+    STEAM_USE_MANGOAPP = "1";
+    STEAM_MANGOAPP_PRESETS_SUPPORTED = "1";
+    STEAM_MANGOAPP_HORIZONTAL_SUPPORTED = "1";
+    STEAM_DISABLE_MANGOAPP_ATOM_WORKAROUND = "1";
+  };
+
   desktop-session = script "alloy-desktop-session" {
     runtimeInputs = [
       pkgs.coreutils
@@ -55,24 +106,68 @@ let
     };
   };
 
-  game-session = script "alloy-game-session" {
+  game-session = steamScript "alloy-game-session" {
     runtimeInputs = [
       pkgs.coreutils
       pkgs.systemd
       config.programs.gamescope.package
       config.programs.steam.package
+      ps-button
     ]
     ++ lib.optional cfg.game.performanceOverlay pkgs.mangohud; # mangoapp
     runtimeEnv =
       sessionEnv
+      // steamEnv
       // {
         ALLOY_GAMESCOPE_ARGS = lib.concatStringsSep " " (
-          cfg.game.gamescopeArgs ++ lib.optional cfg.game.performanceOverlay "--mangoapp"
+          cfg.game.gamescopeArgs
+          # A second Xwayland for Steam's overlays, as STEAM_MULTIPLE_XWAYLANDS expects.
+          ++ [
+            "--xwayland-count"
+            "2"
+          ]
+          ++ lib.optional cfg.game.performanceOverlay "--mangoapp"
         );
         ALLOY_STEAM_ARGS = lib.concatStringsSep " " cfg.game.steamArgs;
+        ALLOY_AUTO_REST_MINUTES = toString (if cfg.rest.enable then cfg.rest.autoRestMinutes else 0);
       }
       // lib.optionalAttrs cfg.game.radvNoHiz { RADV_DEBUG = "nohiz"; };
   };
+
+  rest-session = steamScript "alloy-rest-session" {
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+      config.programs.gamescope.package
+      config.programs.steam.package
+      ps-button
+    ];
+    runtimeEnv = sessionEnv // {
+      ALLOY_DECKY = steamEnv.ALLOY_DECKY;
+      ALLOY_STEAM_ARGS = lib.concatStringsSep " " cfg.game.steamArgs;
+      ALLOY_REST_SHUTDOWN = if cfg.rest.shutdownWhenDone then "1" else "0";
+      ALLOY_REST_QUIET_MINUTES = toString cfg.rest.quietMinutes;
+      ALLOY_REST_QUIET_KIBPS = toString cfg.rest.quietKiBps;
+    };
+  };
+
+  # Powers the display down while resting (the TV sees no signal), through
+  # the console framebuffer that takes over once gamescope lets go.
+  display-power = pkgs.writeShellApplication {
+    name = "alloy-display-power";
+    text = ''
+      # 4 is FB_BLANK_POWERDOWN, 0 is FB_BLANK_UNBLANK.
+      level=$([[ "$1" == off ]] && echo 4 || echo 0)
+      for fb in /sys/class/graphics/fb*/blank; do
+        [[ -e "$fb" ]] && echo "$level" >"$fb"
+      done
+    '';
+  };
+
+  # Units the session user may start and stop without a password.
+  userUnits =
+    lib.optional performance "alloy-game-performance.service"
+    ++ lib.optional cfg.rest.enable "alloy-display-off.service";
 
   alloy-session = script "alloy-session" {
     runtimeInputs = [
@@ -81,7 +176,8 @@ let
       pkgs.systemd
       desktop-session
       game-session
-    ];
+    ]
+    ++ lib.optional cfg.rest.enable rest-session;
     runtimeEnv = sessionEnv;
   };
 in
@@ -89,6 +185,8 @@ in
   imports = [
     ./desktop.nix
     ./game.nix
+    ./decky.nix
+    ./emulation.nix
   ];
 
   options.alloy.modes = {
@@ -150,6 +248,43 @@ in
         type = types.numbers.positive;
         default = 1.0;
         description = "How long the PS button must be held.";
+      };
+    };
+
+    rest = {
+      enable = mkEnableOption "rest mode: screen off while Steam and Decky keep downloading" // {
+        default = true;
+      };
+
+      autoRestMinutes = mkOption {
+        type = types.ints.unsigned;
+        default = 30;
+        description = ''
+          Go from game mode to rest mode after this many minutes without
+          controller input, but never while a game is running. 0 turns it off;
+          the Alloy panel in Steam's Quick Access menu can also turn it off.
+        '';
+      };
+
+      shutdownWhenDone = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Power off once every download has finished, which rest mode notices
+          as the network going quiet. The Alloy panel can override it.
+        '';
+      };
+
+      quietMinutes = mkOption {
+        type = types.ints.positive;
+        default = 10;
+        description = "How long the network has to stay quiet before shutting down.";
+      };
+
+      quietKiBps = mkOption {
+        type = types.ints.positive;
+        default = 64;
+        description = "Download speed (KiB/s) below which the network counts as quiet.";
       };
     };
 
@@ -238,7 +373,16 @@ in
   };
 
   config = lib.mkMerge [
-    { alloy.modes.packages = { inherit alloy-mode steamos-session-select; }; }
+    {
+      alloy.modes.packages = {
+        inherit
+          alloy-mode
+          steamos-session-select
+          ps-button
+          alloy-session
+          ;
+      };
+    }
 
     (lib.mkIf cfg.enable {
       environment.systemPackages = [
@@ -280,12 +424,22 @@ in
         partOf = [ "alloy-game-performance.service" ];
       };
 
-      # Let the session user start/stop only that unit without a password.
+      systemd.services.alloy-display-off = lib.mkIf cfg.rest.enable {
+        description = "Rest mode: display off";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${lib.getExe display-power} off";
+          ExecStop = "${lib.getExe display-power} on";
+        };
+      };
+
+      # Let the session user start/stop only those units without a password.
       security.polkit.enable = true;
-      security.polkit.extraConfig = lib.mkIf performance ''
+      security.polkit.extraConfig = lib.mkIf (userUnits != [ ]) ''
         polkit.addRule(function (action, subject) {
           if (action.id == "org.freedesktop.systemd1.manage-units" &&
-              action.lookup("unit") == "alloy-game-performance.service" &&
+              ${builtins.toJSON userUnits}.indexOf(action.lookup("unit")) >= 0 &&
               subject.user == ${builtins.toJSON cfg.user}) {
             return polkit.Result.YES;
           }

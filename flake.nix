@@ -41,6 +41,13 @@
       flake = false;
     };
 
+    # Decky Loader and its NixOS module (modules/modes/decky.nix); nothing
+    # else from Jovian is used.
+    jovian = {
+      url = "github:Jovian-Experiments/Jovian-NixOS";
+      flake = false;
+    };
+
     # ps5_control (fan + boost).
     ps5-tools = {
       url = "github:ps5-linux/ps5-linux-tools";

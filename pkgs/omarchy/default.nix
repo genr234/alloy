@@ -24,6 +24,7 @@
   installedPackages ? [ ],
   extraLua ? "",
   gameModeMenuEntry ? false,
+  restModeMenuEntry ? false,
 }:
 let
   version = lib.trim (builtins.readFile "${src}/version");
@@ -155,6 +156,11 @@ stdenvNoCC.mkDerivation {
       sed -i '/^  "system.screensaver":/a\  "system.gamemode": {"icon":"󰊗","label":"Game Mode","action":"alloy-mode game"},' \
         $share/default/omarchy/omarchy-menu.jsonc
       grep -q '"system.gamemode"' $share/default/omarchy/omarchy-menu.jsonc
+    ''}
+    ${lib.optionalString restModeMenuEntry ''
+      sed -i '/^  "system.gamemode":/a\  "system.restmode": {"icon":"󰒲","label":"Rest Mode","action":"alloy-mode rest"},' \
+        $share/default/omarchy/omarchy-menu.jsonc
+      grep -q '"system.restmode"' $share/default/omarchy/omarchy-menu.jsonc
     ''}
 
     # --- point absolute Arch paths at NixOS locations (text files only)

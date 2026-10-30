@@ -1,4 +1,5 @@
-# Desktop mode: Hyprland, plus the three ways into game mode.
+# Desktop mode: Hyprland, plus the three ways into game mode (and the
+# launcher for rest mode).
 {
   config,
   lib,
@@ -7,23 +8,7 @@
 }:
 let
   cfg = config.alloy.modes;
-  inherit (cfg.packages) alloy-mode;
-
-  ps-button-daemon = pkgs.writers.writePython3Bin "alloy-ps-button-daemon" {
-    libraries = [ pkgs.python3Packages.evdev ];
-  } (builtins.readFile ./scripts/ps-button.py);
-
-  ps-button = pkgs.writeShellApplication {
-    name = "alloy-ps-button";
-    runtimeInputs = [
-      alloy-mode
-      pkgs.systemd
-    ];
-    runtimeEnv.ALLOY_PS_HOLD_SECONDS = toString cfg.psButton.holdSeconds;
-    # Log to the journal (journalctl -t alloy-ps-button) so the boot report can
-    # show which controllers it saw.
-    text = ''exec systemd-cat --identifier=alloy-ps-button ${lib.getExe ps-button-daemon} "$@"'';
-  };
+  inherit (cfg.packages) ps-button;
 
   game-mode-launcher = pkgs.makeDesktopItem {
     name = "alloy-game-mode";
@@ -33,12 +18,25 @@ let
     icon = "steam";
     categories = [ "Game" ];
   };
+
+  rest-mode-launcher = pkgs.makeDesktopItem {
+    name = "alloy-rest-mode";
+    desktopName = "Rest Mode";
+    comment = "Screen off, downloads keep going; press PS to wake";
+    exec = "alloy-mode rest";
+    icon = "system-suspend";
+    categories = [ "System" ];
+  };
 in
 {
   config = lib.mkIf cfg.enable {
     programs.hyprland.enable = true;
 
-    environment.systemPackages = [ game-mode-launcher ] ++ lib.optional cfg.psButton.enable ps-button;
+    environment.systemPackages = [
+      game-mode-launcher
+    ]
+    ++ lib.optional cfg.rest.enable rest-mode-launcher
+    ++ lib.optional cfg.psButton.enable ps-button;
 
     # Mode-switching bits of the Hyprland config. Everything else (your
     # keybinds, theme, apps) lives in home/.

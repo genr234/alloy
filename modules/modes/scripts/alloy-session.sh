@@ -16,7 +16,7 @@ state="${XDG_STATE_HOME:-$HOME/.local/state}/alloy"
 mkdir -p "$state"
 
 # Every boot starts in the default mode, whatever was requested last time.
-rm -f "$state/next-mode" "$state/end-request" "$state/game-active"
+rm -f "$state/next-mode" "$state/end-request" "$state/game-active" "$state/rest-active"
 
 quick_exits=0
 while true; do
@@ -27,7 +27,7 @@ while true; do
   fi
 
   case "$mode" in
-    desktop | game) ;;
+    desktop | game | rest) ;;
     shell)
       say "back on the TTY. Run 'alloy-session' to start the desktop again."
       exit 0
@@ -50,9 +50,15 @@ while true; do
   else
     quick_exits=0
   fi
+  # A game or rest session that can't start (Steam broken, no display) falls
+  # back to the desktop, even when game mode is the default.
+  if ((quick_exits > 0)) && [[ "$mode" != desktop && ! -f "$state/next-mode" ]]; then
+    say "$mode mode exited right away; falling back to the desktop"
+    echo desktop >"$state/next-mode"
+  fi
   if ((quick_exits >= 3)); then
     say "sessions keep exiting right away; staying on the TTY."
-    say "check 'journalctl -t alloy-desktop -t alloy-game', then run 'alloy-session'."
+    say "check 'journalctl -t alloy-desktop -t alloy-game -t alloy-rest', then run 'alloy-session'."
     exit 1
   fi
 done

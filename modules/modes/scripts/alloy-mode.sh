@@ -1,18 +1,19 @@
-# Switch modes:  alloy-mode game | desktop | shell
+# Switch modes:  alloy-mode game | desktop | rest | shell
 #
 # Records which mode the session loop should start next, then ends the
 # current session.
 
 usage() {
-  echo "usage: alloy-mode game|desktop|shell" >&2
+  echo "usage: alloy-mode game|desktop|rest|shell" >&2
   echo "  game     Steam Big Picture" >&2
   echo "  desktop  Hyprland" >&2
+  echo "  rest     screen off, downloads keep going (press PS to wake)" >&2
   echo "  shell    leave to the TTY (run alloy-session to come back)" >&2
 }
 
 target="${1:-}"
 case "$target" in
-  game | desktop | shell) ;;
+  game | desktop | rest | shell) ;;
   *)
     usage
     exit 2
@@ -31,12 +32,13 @@ case "${ALLOY_MODE:-}" in
       hyprctl dispatch exit >/dev/null
     fi
     ;;
-  game)
+  game | rest)
     touch "$state/end-request"
     ;;
   *)
-    if [[ -e "$state/game-active" ]]; then
-      # Called from somewhere that lost ALLOY_MODE (e.g. Steam's sandbox).
+    if [[ -e "$state/game-active" || -e "$state/rest-active" ]]; then
+      # Called from somewhere that lost ALLOY_MODE (e.g. Steam's sandbox, or
+      # a Decky plugin, which runs outside the session).
       touch "$state/end-request"
     else
       echo "alloy: not inside a alloy session; the next session starts in $target mode"

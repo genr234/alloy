@@ -20,6 +20,22 @@
         "type": "github"
       }
     },
+    "jovian": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793262559,
+        "narHash": "sha256-UlCGeyKKt4eeY8VpPJFf4EXXzSM4eoG1FJL9xXj2gBk=",
+        "owner": "Jovian-Experiments",
+        "repo": "Jovian-NixOS",
+        "rev": "da68c2038839af4413fadb2b69b591893abddc74",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Jovian-Experiments",
+        "repo": "Jovian-NixOS",
+        "type": "github"
+      }
+    },
     "linux": {
       "flake": false,
       "locked": {
@@ -133,6 +149,7 @@
     "root": {
       "inputs": {
         "home-manager": "home-manager",
+        "jovian": "jovian",
         "linux": "linux",
         "mwifiex-nxp": "mwifiex-nxp",
         "nixpkgs": "nixpkgs",
