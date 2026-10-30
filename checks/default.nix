@@ -5,7 +5,8 @@
 #   steam-sessions
 #                 the game and rest sessions with stand-in Steam and gamescope:
 #                 Power menu, Decky, idle watcher, rest mode's shutdown when
-#                 downloads finish and its wake-up
+#                 downloads finish (Steam's queue, container traffic) and its
+#                 wake-up
 #   ps-button     the PS-button hold detection, idle timer and game detection
 #   omarchy-first-login
 #                 Omarchy's own first-login setup, theme switch and config reset
@@ -308,8 +309,9 @@ in
       set -euo pipefail
       export HOME=$PWD/home XDG_STATE_HOME=$PWD/state PATH=$PWD/fakebin:$PATH
       state=$XDG_STATE_HOME/alloy
-      mkdir -p fakebin "$HOME" net/lo/statistics net/eth0/statistics
-      echo 0 > net/lo/statistics/rx_bytes; echo 0 > net/eth0/statistics/rx_bytes
+      # A real interface (it has a device link) and a podman bridge (it doesn't).
+      mkdir -p fakebin "$HOME" net/lo/statistics net/eth0/statistics net/eth0/device net/podman0/statistics
+      for i in lo eth0 podman0; do echo 0 > net/$i/statistics/rx_bytes; done
 
       # Stand-ins: gamescope "runs" until Steam is told to shut down.
       cat > fakebin/gamescope <<EOF
@@ -369,6 +371,37 @@ in
       wait
       if grep -q poweroff calls; then exit 1; fi
       echo "rest: 'shut down when downloads finish' off: ok"
+      rm $state/shutdown-when-done
+
+      # Container traffic doesn't count as downloading: it powers off while the
+      # bridge is still busy (PS is pressed after 6s otherwise).
+      rm calls
+      (for i in $(seq 40); do echo $((i * 10000000)) > net/podman0/statistics/rx_bytes; sleep 0.25; done) &
+      bridge=$!
+      (sleep 6; touch $state/end-request) &
+      waker=$!
+      rest
+      kill $bridge $waker 2>/dev/null || true; wait || true
+      rm -f $state/end-request
+      grep -qx "systemctl poweroff" calls
+      echo "rest: busy podman bridge, still powers off: ok"
+
+      # Steam still has downloads queued (the Alloy panel says so): the quiet
+      # network doesn't count, until the queue empties.
+      rm calls
+      (sleep 0.3; echo 2 > $state/steam-downloads; sleep 4; touch $state/end-request) &
+      rest
+      wait
+      if grep -q poweroff calls; then exit 1; fi
+      test ! -e $state/steam-downloads
+      echo "rest: Steam downloads queued, stays up: ok"
+
+      rm calls
+      (sleep 0.3; echo 1 > $state/steam-downloads; sleep 3; echo 0 > $state/steam-downloads) &
+      rest
+      wait
+      grep -qx "systemctl poweroff" calls
+      echo "rest: Steam queue empties, powers off: ok"
 
       # Game: boost, idle watcher, Decky, and Steam's Power menu shutting down.
       rm calls

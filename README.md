@@ -53,8 +53,10 @@ it up into game mode.
   button), from Rest Mode in the desktop menu, or with `alloy-mode rest`.
 - Game mode goes into rest by itself after 30 minutes without controller input,
   but never while a game is running.
-- When every download is done (the network stays quiet for 10 minutes), the
-  console shuts down.
+- When every download is done, the console shuts down: Steam's download queue
+  has to be empty (downloads you paused don't count) and the network has to
+  stay quiet for 10 minutes, so Tender's downloads finish too. Traffic from
+  containers doesn't count as downloading.
 
 Rest mode closes the game that's running, since the PS5 can't pause it. The
 Alloy panel can switch auto-rest and the shutdown off;

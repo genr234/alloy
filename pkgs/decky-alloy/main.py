@@ -1,6 +1,7 @@
 """Alloy's panel in Steam's Quick Access menu.
 
-Rest mode and its two switches, and PS5 boost. Runs as the console's user,
+Rest mode and its two switches, PS5 boost, and Steam's download queue for
+rest mode's shutdown. Runs as the console's user,
 not root: the switches are files in Alloy's state directory, which the
 session scripts read (modules/modes/scripts), and boost is a unit that user
 may start and stop (modules/modes/default.nix).
@@ -17,6 +18,8 @@ STATE = os.path.join(decky.DECKY_USER_HOME, ".local", "state", "alloy")
 DEFAULTS = "/etc/alloy/modes.json"
 BOOST_UNIT = "alloy-game-performance.service"
 SETTINGS = ("auto-rest", "shutdown-when-done")
+# Read by alloy-rest-session.sh: Steam downloads still to do.
+DOWNLOADS = "steam-downloads"
 
 
 def defaults():
@@ -68,6 +71,13 @@ class Plugin:
         os.makedirs(STATE, exist_ok=True)
         with open(os.path.join(STATE, name), "w") as f:
             f.write("on\n" if on else "off\n")
+
+    async def report_downloads(self, pending):
+        os.makedirs(STATE, exist_ok=True)
+        path = os.path.join(STATE, DOWNLOADS)
+        with open(path + ".tmp", "w") as f:
+            f.write(f"{int(pending)}\n")
+        os.replace(path + ".tmp", path)
 
     async def set_boost(self, on):
         code, _ = await run("systemctl", "start" if on else "stop", BOOST_UNIT)
