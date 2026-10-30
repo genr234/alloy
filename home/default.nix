@@ -3,7 +3,10 @@
 # and settings that aren't Omarchy's here.
 { ... }:
 {
-  imports = [ ./plain-desktop.nix ];
+  imports = [
+    ./plain-desktop.nix
+    ./sync.nix
+  ];
 
   home.stateVersion = "26.11";
 }

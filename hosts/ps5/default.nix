@@ -16,7 +16,7 @@ in
   # Desktop mode runs Omarchy's own frontend (modules/omarchy).
   alloy.omarchy = {
     enable = true;
-    updateFlake = "github:genr234/alloy#ps5";  # what Omarchy's Update menu rebuilds from
+    updateFlake = "github:genr234/alloy#ps5"; # what Omarchy's Update menu rebuilds from
     # skipPackages = [ "libreoffice-fresh" ];   # leave out Omarchy packages you don't want
   };
 
@@ -87,6 +87,19 @@ in
       PasswordAuthentication = false;
       KbdInteractiveAuthentication = false;
     };
+  };
+
+  # Reach the PS5 from your Mac anywhere, not just at home (`sudo tailscale up`
+  # once to log in). Syncthing uses it too when both are on your tailnet.
+  services.tailscale.enable = true;
+  networking.firewall = {
+    trustedInterfaces = [ "tailscale0" ];
+    # Syncthing on the local network: sync (22000) and discovery (21027).
+    allowedTCPPorts = [ 22000 ];
+    allowedUDPPorts = [
+      22000
+      21027
+    ];
   };
 
   nix.settings = {
