@@ -17,6 +17,7 @@ in
     ./image.nix
     ./report.nix
     ./wifi.nix
+    ./bluetooth.nix
     ./m2.nix
     ./hardware.nix
   ];
