@@ -1,7 +1,7 @@
 # alloy-boot-confirm: decide whether this boot worked.
 #
 # The generation picker (stage 1) leaves the generation it booted in
-# /var/lib/alloy/boot-trial. Once desktop or game mode has started and stayed
+# /var/lib/alloy/boot-trial. Once desktop, game or rest mode has started and stayed
 # up for 20 seconds, this removes the marker: the generation is good. If the
 # marker is still there at the next boot, the picker falls back to the
 # previous generation.
@@ -14,7 +14,7 @@ marker=/var/lib/alloy/boot-trial
 [[ -f $marker ]] || exit 0
 
 session_log=$(journalctl --no-pager -b -o short-unix -t alloy-session 2>/dev/null || true)
-last=$(grep -E 'starting (desktop|game) mode|mode ended after|keep exiting' <<<"$session_log" | tail -n 1 || true)
+last=$(grep -E 'starting (desktop|game|rest) mode|mode ended after|keep exiting' <<<"$session_log" | tail -n 1 || true)
 
 if [[ $last != *"starting "*" mode"* ]]; then
   exit 0 # no session running (yet)

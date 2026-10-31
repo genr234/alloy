@@ -1,7 +1,8 @@
 # `nix flake check` runs these. None of them compile the PS5 kernel:
 #
 #   install-boot  the boot hook: install, no-op reinstall, rotation to *.old, limits
-#   session-loop  mode switching logic of alloy-session and alloy-mode
+#   session-loop  mode switching logic of alloy-session and alloy-mode, picking
+#                 up an updated system, and alloy-update's restart decision
 #   steam-sessions
 #                 the game and rest sessions with stand-in Steam and gamescope:
 #                 Power menu, Decky, idle watcher, rest mode's shutdown when
@@ -197,6 +198,8 @@ in
           cat > fakebin/alloy-$m-session <<EOF
         #!/usr/bin/env bash
         echo $m >> $PWD/ran
+        # A test can "update the system" while a session runs.
+        [ ! -e $PWD/swap ] || { ln -sfn sysB $PWD/cur; rm $PWD/swap; }
         next=\$(head -n1 $PWD/plan); sed -i 1d $PWD/plan
         [ "\$next" = exit ] || echo "\$next" > $state/next-mode
         EOF
@@ -296,6 +299,64 @@ in
 
         if ${bashScript "$mode"} bogus 2>/dev/null; then exit 1; fi
         echo "alloy-mode / steamos-session-select: ok"
+
+        # alloy-update finish restarted into a new kernel asking for a mode: the
+        # first session is that mode. A request left by a kexec that never
+        # happened is ignored.
+        rm -f ran $state/*; echo rest > $state/boot-mode; printf '%s\n' exit shell > plan
+        ${bashScript ../modules/modes/scripts/alloy-session.sh}
+        test "$(tr '\n' ' ' < ran)" = "rest desktop "
+        test ! -e $state/boot-mode
+        rm ran; echo rest > $state/boot-mode; touch -d '20 minutes ago' $state/boot-mode
+        printf '%s\n' shell > plan
+        ${bashScript ../modules/modes/scripts/alloy-session.sh}
+        test "$(cat ran)" = desktop
+        test ! -e $state/boot-mode
+        echo "boot-mode after a kernel restart, stale ones ignored: ok"
+
+        # nixos-rebuild switch while a session runs: before the next mode, the
+        # loop hands over to the new system's alloy-session, keeping the request.
+        mkdir -p sysA/sw/bin sysB/sw/bin
+        cat > sysB/sw/bin/alloy-session <<EOF
+        #!${pkgs.bash}/bin/bash
+        echo "\$* next=\$(cat $state/next-mode)" > $PWD/reloaded
+        EOF
+        chmod +x sysB/sw/bin/alloy-session
+        ln -sfn sysA cur; touch swap
+        rm ran; printf '%s\n' game > plan
+        ALLOY_CURRENT_SYSTEM=$PWD/cur ${bashScript ../modules/modes/scripts/alloy-session.sh}
+        test "$(cat ran)" = desktop
+        test "$(cat reloaded)" = "--reload next=game"
+        echo "session loop picks up an updated system: ok"
+
+        # alloy-update: only kernel, initrd, modules or kernel parameters need a restart.
+        cat > fakebin/systemctl <<EOF
+        #!${pkgs.bash}/bin/bash
+        echo "systemctl \$*" >> $PWD/systemctl.log
+        [ -z "\''${FAKE_SYSTEMCTL_FAIL:-}" ]
+        EOF
+        chmod +x fakebin/systemctl
+        for d in booted current; do
+          mkdir $d; ln -s /k1 $d/kernel; ln -s /i1 $d/initrd; ln -s /m1 $d/kernel-modules
+          echo quiet > $d/kernel-params
+        done
+        upd="env ALLOY_BOOTED_SYSTEM=$PWD/booted ALLOY_CURRENT_SYSTEM=$PWD/current ${bashScript ../modules/modes/scripts/alloy-update.sh}"
+        rm -f $state/*
+        test "$($upd status || true)" = current
+        $upd finish game
+        test ! -e $state/boot-mode && test ! -e systemctl.log
+        echo "quiet video=DP-1:1920x1080" > current/kernel-params
+        test "$($upd status)" = restart
+        echo quiet > current/kernel-params; ln -sfn /m2 current/kernel-modules
+        test "$($upd status)" = restart
+        $upd finish game
+        grep -qx game $state/boot-mode
+        grep -qx "systemctl start alloy-kexec.service" systemctl.log
+        rm $state/boot-mode
+        if FAKE_SYSTEMCTL_FAIL=1 $upd finish game 2>/dev/null; then exit 1; fi
+        test ! -e $state/boot-mode
+        if $upd finish bogus 2>/dev/null; then exit 1; fi
+        echo "alloy-update: when to restart, finish, failed kexec: ok"
         touch $out
       '';
 
@@ -333,6 +394,12 @@ in
       cat > fakebin/alloy-download <<EOF
       #!${pkgs.bash}/bin/bash
       cat $PWD/aria2-pending 2>/dev/null || echo 0
+      EOF
+      # A kernel update is waiting when FAKE_UPDATE is set; the kexec fails.
+      cat > fakebin/alloy-update <<EOF
+      #!${pkgs.bash}/bin/bash
+      echo "alloy-update \$*" >> $PWD/calls
+      [ "\$1" = status ] && [ -n "\''${FAKE_UPDATE:-}" ]
       EOF
       for cmd in systemctl alloy-ps-button; do
         cat > fakebin/$cmd <<EOF
@@ -380,6 +447,17 @@ in
       if grep -q poweroff calls; then exit 1; fi
       echo "rest: 'shut down when downloads finish' off: ok"
       rm $state/shutdown-when-done
+
+      # A kernel update waiting: rest mode tries to start it before anything
+      # else, and rests as usual when that fails.
+      rm calls
+      (sleep 4; touch $state/end-request) &
+      FAKE_UPDATE=1 ALLOY_REST_FINISH_UPDATES=1 rest
+      wait
+      grep -qx "alloy-update finish rest" calls
+      test "$(grep -n -m1 '^alloy-update finish' calls | cut -d: -f1)" -lt \
+        "$(grep -n -m1 '^gamescope' calls | cut -d: -f1)"
+      echo "rest: finishes a waiting kernel update first: ok"
 
       # Container traffic doesn't count as downloading: it powers off while the
       # bridge is still busy (PS is pressed after 6s otherwise).

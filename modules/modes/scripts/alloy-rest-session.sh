@@ -6,6 +6,9 @@
 # sees no signal and boost stays off. Pressing PS, or turning a controller
 # back on, wakes the console into game mode.
 #
+# A kernel update waiting for a restart is finished first, with kexec: nothing
+# is open in rest mode, and the console comes back resting.
+#
 # Once the network has been quiet for ALLOY_REST_QUIET_MINUTES, Steam's
 # download queue is empty and alloy-download (aria2) has nothing left to
 # download or extract, the console shuts down, unless that was switched off
@@ -34,6 +37,14 @@ systemctl start alloy-display-off.service ||
   echo "alloy: could not switch the display off" >&2
 enable_decky
 touch "$state/rest-active"
+
+if [[ "${ALLOY_REST_FINISH_UPDATES:-0}" == 1 ]] && alloy-update status >/dev/null; then
+  echo "alloy: finishing a kernel update first"
+  if alloy-update finish rest; then
+    sleep 60 # the system is going down; if it's still up, rest as usual
+    rm -f "$state/boot-mode"
+  fi
+fi
 
 gamescope --backend headless -- steam "${steam_args[@]}" &
 gamescope_pid=$!
