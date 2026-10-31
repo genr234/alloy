@@ -128,9 +128,15 @@ in
         wants = [ "network-online.target" ];
         after = [ "network-online.target" ];
         path = [ pkgs.flatpak ];
+        # remote-add downloads the .flatpakrepo file, so retry while offline
+        # (at boot, or while nixos-rebuild switch restarts NetworkManager)
+        # instead of failing.
+        unitConfig.StartLimitIntervalSec = 0;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
+          Restart = "on-failure";
+          RestartSec = 30;
         };
         script = ''
           flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo

@@ -27,6 +27,9 @@ in
 
     # Installed once, in the background: it's a big download and boot
     # shouldn't wait for it. After that, Flatpak updates it like any app.
+    # It keeps retrying instead of failing: the network can be down for a
+    # moment, e.g. while nixos-rebuild switch restarts NetworkManager, and a
+    # failed unit would fail the whole switch.
     systemd.services.alloy-retrodeck = {
       description = "Install RetroDECK from Flathub";
       wantedBy = [ "multi-user.target" ];
@@ -37,9 +40,14 @@ in
       ];
       path = [ pkgs.flatpak ];
       serviceConfig.Type = "exec";
+      # Don't restart an install that's under way on every switch.
+      restartIfChanged = false;
       script = ''
-        flatpak info --system net.retrodeck.retrodeck >/dev/null 2>&1 ||
-          flatpak install --system --noninteractive flathub net.retrodeck.retrodeck
+        until flatpak info --system net.retrodeck.retrodeck >/dev/null 2>&1; do
+          flatpak install --system --noninteractive flathub net.retrodeck.retrodeck && break
+          echo "alloy: couldn't install RetroDECK (offline?), trying again in a minute" >&2
+          sleep 60
+        done
       '';
     };
   };
