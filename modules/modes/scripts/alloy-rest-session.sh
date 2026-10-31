@@ -6,10 +6,11 @@
 # sees no signal and boost stays off. Pressing PS, or turning a controller
 # back on, wakes the console into game mode.
 #
-# Once the network has been quiet for ALLOY_REST_QUIET_MINUTES and Steam's
-# download queue is empty (every download done), the console shuts down,
-# unless that was switched off in the Alloy panel. The queue comes from the
-# Alloy panel (steam-downloads); without Decky, the network alone decides.
+# Once the network has been quiet for ALLOY_REST_QUIET_MINUTES, Steam's
+# download queue is empty and alloy-download (aria2) has nothing left to
+# download or extract, the console shuts down, unless that was switched off
+# in the Alloy panel. Steam's queue comes from the Alloy panel
+# (steam-downloads); without Decky, the network decides for Steam.
 
 state="${XDG_STATE_HOME:-$HOME/.local/state}/alloy"
 mkdir -p "$state"
@@ -66,6 +67,15 @@ steam_queue_empty() {
   [[ "$pending" == 0 ]]
 }
 
+# alloy-download's downloads, and the archives it is still extracting (which
+# keep the network quiet but must not be cut short by a power off).
+other_downloads_done() {
+  [[ "${ALLOY_DOWNLOADS:-0}" == 1 ]] || return 0
+  local pending
+  pending=$(alloy-download pending 2>/dev/null) || return 0
+  [[ "$pending" == 0 ]]
+}
+
 sample=${ALLOY_REST_SAMPLE_SECONDS:-60}
 busy_bytes=$((ALLOY_REST_QUIET_KIBPS * 1024 * sample))
 quiet=0 ticks=0 poweroff=0
@@ -89,7 +99,8 @@ while kill -0 "$gamescope_pid" 2>/dev/null; do
     quiet=0
   fi
   last_rx=$rx
-  if ((quiet >= ALLOY_REST_QUIET_MINUTES)) && shutdown_when_done && steam_queue_empty; then
+  if ((quiet >= ALLOY_REST_QUIET_MINUTES)) && shutdown_when_done && steam_queue_empty &&
+    other_downloads_done; then
     echo "alloy: downloads look finished (network quiet), shutting down"
     poweroff=1
     quit_steam "$gamescope_pid"

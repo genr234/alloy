@@ -7,6 +7,9 @@
 #                 Power menu, Decky, idle watcher, rest mode's shutdown when
 #                 downloads finish (Steam's queue, container traffic) and its
 #                 wake-up
+#   downloads     alloy-download: archive set names, extraction of split
+#                 archives, incomplete or failed sets, and the count of
+#                 downloads and extractions rest mode waits for
 #   ps-button     the PS-button hold detection, idle timer and game detection
 #   omarchy-first-login
 #                 Omarchy's own first-login setup, theme switch and config reset
@@ -326,6 +329,11 @@ in
       echo "steam \$*" >> $PWD/calls
       [ "\$1" != -shutdown ] || kill \$(cat $PWD/gamescope.pid)
       EOF
+      # alloy-download's queue: whatever the test writes to aria2-pending.
+      cat > fakebin/alloy-download <<EOF
+      #!${pkgs.bash}/bin/bash
+      cat $PWD/aria2-pending 2>/dev/null || echo 0
+      EOF
       for cmd in systemctl alloy-ps-button; do
         cat > fakebin/$cmd <<EOF
       #!${pkgs.bash}/bin/bash
@@ -335,7 +343,7 @@ in
       done
       chmod +x fakebin/*
 
-      common="ALLOY_STEAM_ARGS=-gamepadui ALLOY_PERFORMANCE=1 ALLOY_DECKY=1"
+      common="ALLOY_STEAM_ARGS=-gamepadui ALLOY_PERFORMANCE=1 ALLOY_DECKY=1 ALLOY_DOWNLOADS=1"
       rest() {
         env $common ALLOY_NET_DIR=$PWD/net ALLOY_REST_SAMPLE_SECONDS=1 \
           ALLOY_REST_QUIET_MINUTES=2 ALLOY_REST_QUIET_KIBPS=64 ALLOY_REST_SHUTDOWN=1 \
@@ -403,6 +411,22 @@ in
       grep -qx "systemctl poweroff" calls
       echo "rest: Steam queue empties, powers off: ok"
 
+      # alloy-download still downloading or extracting: same, until it's done.
+      rm calls
+      (sleep 0.3; echo 3 > aria2-pending; sleep 4; touch $state/end-request) &
+      rest
+      wait
+      if grep -q poweroff calls; then exit 1; fi
+      echo "rest: alloy-download busy, stays up: ok"
+
+      rm calls
+      (sleep 0.3; echo 1 > aria2-pending; sleep 3; echo 0 > aria2-pending) &
+      rest
+      wait
+      grep -qx "systemctl poweroff" calls
+      rm aria2-pending
+      echo "rest: alloy-download done, powers off: ok"
+
       # Game: boost, idle watcher, Decky, and Steam's Power menu shutting down.
       rm calls
       env $common ALLOY_GAMESCOPE_ARGS="--backend drm" ALLOY_AUTO_REST_MINUTES=30 \
@@ -416,6 +440,71 @@ in
       echo "game: boost, idle watcher, Power menu shutdown: ok"
       touch $out
     '';
+
+  downloads = pkgs.runCommand "alloy-check-downloads" { nativeBuildInputs = [ pkgs._7zz ]; } ''
+    set -euo pipefail
+    export HOME=$PWD/home XDG_STATE_HOME=$PWD/state ALLOY_7Z=7zz
+    # Nothing listens there: as if the aria2 service weren't running.
+    export ALLOY_ARIA2_RPC=http://127.0.0.1:9/jsonrpc
+    mkdir -p home src/Game state/alloy dl del
+    echo secret > state/alloy/aria2-secret
+    cp ${../modules/modes/scripts/alloy-download.py} alloy_download.py
+    dl() { ${pkgs.python3}/bin/python alloy_download.py "$@"; }
+
+    ${pkgs.python3}/bin/python - <<'EOF'
+    import alloy_download as d
+    s = d.archive_set
+    assert s("Big.Game.part01.rar")[0] == "Big.Game" and s("Big.Game.part01.rar")[2]
+    assert not s("Big.Game.part02.rar")[2]
+    assert s("Big.Game.part1.rar")[1].match("Big.Game.part17.rar")
+    assert not s("Big.Game.part1.rar")[1].match("Other.part17.rar")
+    assert s("x.7z.001")[0] == "x" and not s("x.7z.002")[2]
+    assert s("a.rar")[0] == "a" and s("b.txt") is None
+    print("archive set names: ok")
+    EOF
+
+    head -c 3000000 /dev/urandom > src/Game/data.bin
+    7zz a -v1m -mx0 dl/Game.7z ./src/Game > /dev/null
+    test -e dl/Game.7z.003
+
+    # A part still downloading (aria2's control file is there): wait.
+    touch dl/Game.7z.002.aria2
+    dl extract dl 2> err
+    grep -q "waiting for Game.7z.002" err
+    test ! -e dl/Game
+    rm dl/Game.7z.002.aria2
+
+    # A part missing: fails cleanly, and isn't tried again with the same parts.
+    mv dl/Game.7z.003 part3
+    if dl extract dl 2> err; then echo "should have failed"; exit 1; fi
+    test -e dl/.Game.failed && test ! -e dl/Game && test ! -e dl/.Game.extracting
+    dl extract dl 2> err
+    if grep -q extracting err; then echo "tried the same parts again"; exit 1; fi
+    echo "incomplete sets wait or fail cleanly: ok"
+
+    mv part3 dl/Game.7z.003
+    dl extract dl
+    cmp dl/Game/data.bin src/Game/data.bin
+    test -e dl/.Game.extracted && test ! -e dl/.Game.failed && test -e dl/Game.7z.001
+    dl extract dl 2> err
+    if grep -q extracting err; then echo "extracted twice"; exit 1; fi
+    echo "split archive extracted once, parts kept: ok"
+
+    7zz a del/Loose.7z ./src/Game/data.bin > /dev/null
+    ALLOY_DOWNLOADS_DELETE_ARCHIVES=1 dl extract del
+    test -e del/Loose/data.bin && test ! -e del/Loose.7z
+    echo "loose files go into a folder, archives deleted on request: ok"
+
+    test "$(dl pending)" = 0
+    mkdir -p state/alloy/extracting
+    sleep 1000 &
+    touch state/alloy/extracting/$! state/alloy/extracting/999999999
+    test "$(dl pending)" = 1
+    test ! -e state/alloy/extracting/999999999
+    kill %1
+    echo "pending counts running extractions: ok"
+    touch $out
+  '';
 
   ps-button =
     let

@@ -7,6 +7,7 @@
 #                               |                     -- Alloy panel / 30 min idle        -->  rest
 #                               '- rest               -- press PS / controller on         -->  game
 #                                                     -- downloads done                   -->  power off
+#                                                        (Steam, Decky, alloy-download)
 #
 # The loop starts the default mode unless `alloy-mode` asked for another one,
 # so every boot, and every way of leaving Steam, ends up on the desktop.
@@ -141,9 +142,11 @@ let
       config.programs.gamescope.package
       config.programs.steam.package
       ps-button
-    ];
+    ]
+    ++ lib.optional cfg.downloads.enable cfg.downloads.package;
     runtimeEnv = sessionEnv // {
       ALLOY_DECKY = steamEnv.ALLOY_DECKY;
+      ALLOY_DOWNLOADS = if cfg.downloads.enable then "1" else "0";
       ALLOY_STEAM_ARGS = lib.concatStringsSep " " cfg.game.steamArgs;
       ALLOY_REST_SHUTDOWN = if cfg.rest.shutdownWhenDone then "1" else "0";
       ALLOY_REST_QUIET_MINUTES = toString cfg.rest.quietMinutes;
@@ -187,6 +190,7 @@ in
     ./game.nix
     ./decky.nix
     ./emulation.nix
+    ./downloads.nix
   ];
 
   options.alloy.modes = {
@@ -271,7 +275,8 @@ in
         default = true;
         description = ''
           Power off once every download has finished: Steam's download queue
-          is empty (as the Alloy panel reports it, when Decky is on) and the
+          is empty (as the Alloy panel reports it, when Decky is on),
+          alloy-download has nothing left to download or extract, and the
           network has gone quiet. The Alloy panel can override it.
         '';
       };
