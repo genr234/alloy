@@ -2,6 +2,11 @@
 # below, not your whole home (caches, Steam and per-machine config stay put).
 # The GUI is at http://127.0.0.1:8384.
 { ... }:
+let
+  # .stignore never syncs, so each side only includes the shared
+  # .stglobalignore that lives in (and syncs with) the folder.
+  includeShared = "#include .stglobalignore\n";
+in
 {
   services.syncthing = {
     enable = true;
@@ -10,18 +15,30 @@
     overrideDevices = false;
     overrideFolders = false;
     settings = {
-      # mac = {
-      #   id = "XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX";
-      #   addresses = [ "dynamic" ];
-      # };
-      devices = { };
+      devices = {
+        mac = {
+          id = "DK66KBP-RFQNIO7-C3XRRSZ-UO6OV4V-FVI5ELA-PCETMXJ-3GH3NCD-D3RPMA4";
+          addresses = [ "dynamic" ];
+        };
+      };
       # Same folder ID on both machines; the path can differ.
-      # projects = {
-      #   path = "~/Projects";
-      #   devices = [ "mac" ];
-      # };
-      folders = { };
+      folders = {
+        projects = {
+          label = "Projects";
+          path = "~/Projects";
+          devices = [ "mac" ];
+        };
+        # The Obsidian vault, at ~/Documents/Obsidian Vault on the Mac.
+        notes = {
+          label = "Notes";
+          path = "~/Notes";
+          devices = [ "mac" ];
+        };
+      };
       options.urAccepted = -1; # no usage reporting
     };
   };
+
+  home.file."Projects/.stignore".text = includeShared;
+  home.file."Notes/.stignore".text = includeShared;
 }
