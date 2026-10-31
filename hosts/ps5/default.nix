@@ -61,6 +61,8 @@ in
     # game.retrodeck = true;              # RetroDECK from Flathub, for Tender (default)
     # rest.autoRestMinutes = 30;          # rest after 30 min idle, 0 = never (default)
     # rest.shutdownWhenDone = true;       # power off once downloads finish (default)
+    # downloads.connections = 4;          # aria2: connections per file (default)
+    # downloads.deleteArchives = false;   # delete .rar parts after extracting (default)
   };
 
   # The VanillaOS layer (defaults shown).

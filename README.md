@@ -54,13 +54,43 @@ it up into game mode.
 - Game mode goes into rest by itself after 30 minutes without controller input,
   but never while a game is running.
 - When every download is done, the console shuts down: Steam's download queue
-  has to be empty (downloads you paused don't count) and the network has to
+  has to be empty (downloads you paused don't count), so does aria2's (see
+  Downloads below, archives included), and the network has to
   stay quiet for 10 minutes, so Tender's downloads finish too. Traffic from
   containers doesn't count as downloading.
 
 Rest mode closes the game that's running, since the PS5 can't pause it. The
 Alloy panel can switch auto-rest and the shutdown off;
 `alloy.modes.rest` in `hosts/ps5` sets the defaults.
+
+### Downloads
+
+Downloads from the browser stop when the desktop closes for rest mode, so big
+ones go to **aria2** instead: a download manager that runs as a background
+service (`alloy-downloads`). It splits each file over several connections,
+like IDM, resumes after a reboot, and rest mode waits for it before shutting
+down.
+
+- **From the browser:** install the *Aria2 Explorer* extension, and in its
+  settings set the RPC address to `http://127.0.0.1:6800/jsonrpc` and the
+  secret to what `alloy-download secret` prints. Downloads you start in the
+  browser then go to aria2. On file-host pages (FuckingFast, DataNodes and
+  the like) just press their download button.
+- **From a terminal:** `alloy-download URL...`, or
+  `alloy-download -i links.txt` with one direct link per line.
+- **Watch them:** the **Downloads** app (AriaNg), or `alloy-download status`.
+
+Files go to `~/Downloads`. When the last part of a split archive arrives
+(`name.part01.rar` ... `name.part20.rar`, `name.7z.001` ..., or a single
+`.rar`/`.7z`/`.zip`), it's extracted next to the parts. A set with a missing
+or broken part, or a password, is left as it is (see
+`journalctl --user -u alloy-downloads`). `alloy-download extract` tries again
+by hand. Set `alloy.modes.downloads.deleteArchives` to delete the parts after
+extracting.
+
+So for a big download: queue every part, press **Rest now** (or pick Rest Mode
+in the desktop menu), and leave. The console powers off once the parts are
+downloaded and extracted, and Steam's queue is empty.
 
 ### Decky plugins
 
