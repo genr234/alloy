@@ -270,8 +270,9 @@ in
         type = types.bool;
         default = true;
         description = ''
-          Power off once every download has finished, which rest mode notices
-          as the network going quiet. The Alloy panel can override it.
+          Power off once every download has finished: Steam's download queue
+          is empty (as the Alloy panel reports it, when Decky is on) and the
+          network has gone quiet. The Alloy panel can override it.
         '';
       };
 

@@ -22,6 +22,22 @@ const getStatus = callable<[], Status>("get_status");
 const setSetting = callable<[name: string, on: boolean], void>("set_setting");
 const setBoost = callable<[on: boolean], boolean>("set_boost");
 const restNow = callable<[], boolean>("rest_now");
+const reportDownloads = callable<[pending: number], void>("report_downloads");
+
+// Tells rest mode how many Steam downloads are still to do, so it doesn't
+// shut down while Steam waits on a download schedule or a slow server. An
+// item paused by hand doesn't count: it would keep the console up forever.
+function watchDownloads() {
+  let last = -1;
+  return SteamClient.Downloads.RegisterForDownloadItems((isDownloading, items) => {
+    const pending = items.filter((i) => !i.completed && !i.paused).length;
+    const count = isDownloading ? Math.max(pending, 1) : pending;
+    if (count !== last) {
+      last = count;
+      reportDownloads(count);
+    }
+  });
+}
 
 function Content() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -92,9 +108,13 @@ function Content() {
   );
 }
 
-export default definePlugin(() => ({
-  name: "Alloy",
-  titleView: <div className={staticClasses.Title}>Alloy</div>,
-  content: <Content />,
-  icon: <FaMoon />,
-}));
+export default definePlugin(() => {
+  const downloads = watchDownloads();
+  return {
+    name: "Alloy",
+    titleView: <div className={staticClasses.Title}>Alloy</div>,
+    content: <Content />,
+    icon: <FaMoon />,
+    onDismount: () => downloads.unregister(),
+  };
+});
