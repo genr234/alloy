@@ -66,6 +66,31 @@ let
     ];
   };
 
+  alloy-update = script "alloy-update" {
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+      pkgs.libnotify
+    ];
+  };
+
+  # Starts the current system's kernel with kexec: the second half of
+  # `alloy-update finish`, as root.
+  kexec-current = pkgs.writeShellApplication {
+    name = "alloy-kexec-current";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.kexec-tools
+      pkgs.systemd
+    ];
+    text = ''
+      system=$(readlink -f /run/current-system)
+      kexec -l "$system/kernel" --initrd="$system/initrd" \
+        --command-line="init=$system/init $(<"$system/kernel-params")"
+      systemctl --no-block kexec
+    '';
+  };
+
   steamos-session-select = script "steamos-session-select" {
     runtimeInputs = [ alloy-mode ];
   };
@@ -142,10 +167,12 @@ let
       config.programs.gamescope.package
       config.programs.steam.package
       ps-button
+      alloy-update
     ]
     ++ lib.optional cfg.downloads.enable cfg.downloads.package;
     runtimeEnv = sessionEnv // {
       ALLOY_DECKY = steamEnv.ALLOY_DECKY;
+      ALLOY_REST_FINISH_UPDATES = if cfg.rest.finishUpdates then "1" else "0";
       ALLOY_DOWNLOADS = if cfg.downloads.enable then "1" else "0";
       ALLOY_STEAM_ARGS = lib.concatStringsSep " " cfg.game.steamArgs;
       ALLOY_REST_SHUTDOWN = if cfg.rest.shutdownWhenDone then "1" else "0";
@@ -170,7 +197,8 @@ let
   # Units the session user may start and stop without a password.
   userUnits =
     lib.optional performance "alloy-game-performance.service"
-    ++ lib.optional cfg.rest.enable "alloy-display-off.service";
+    ++ lib.optional cfg.rest.enable "alloy-display-off.service"
+    ++ [ "alloy-kexec.service" ];
 
   alloy-session = script "alloy-session" {
     runtimeInputs = [
@@ -258,6 +286,17 @@ in
     rest = {
       enable = mkEnableOption "rest mode: screen off while Steam and Decky keep downloading" // {
         default = true;
+      };
+
+      finishUpdates = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          When an update changed the kernel, start it (with kexec, a few
+          seconds) on the way into rest mode, then carry on resting. Without
+          this, `alloy-update finish`, the Alloy panel or the desktop
+          notification do it.
+        '';
       };
 
       autoRestMinutes = mkOption {
@@ -386,6 +425,7 @@ in
           steamos-session-select
           ps-button
           alloy-session
+          alloy-update
           ;
       };
     }
@@ -393,6 +433,7 @@ in
     (lib.mkIf cfg.enable {
       environment.systemPackages = [
         alloy-session
+        alloy-update
         alloy-mode
         steamos-session-select
       ];
@@ -438,6 +479,26 @@ in
           ExecStart = "${lib.getExe display-power} off";
           ExecStop = "${lib.getExe display-power} on";
         };
+      };
+
+      # The root half of `alloy-update finish`: kexec into the current system.
+      systemd.services.alloy-kexec = {
+        description = "Restart into the updated kernel (kexec)";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = lib.getExe kexec-current;
+        };
+      };
+
+      # After `nixos-rebuild switch` changed the kernel, offer the restart on
+      # the desktop (game mode has the Alloy panel; rest mode does it itself).
+      systemd.user.paths.alloy-update-notify = {
+        wantedBy = [ "default.target" ];
+        pathConfig.PathChanged = "/run/current-system";
+      };
+      systemd.user.services.alloy-update-notify = {
+        description = "Offer to finish a kernel update";
+        serviceConfig.ExecStart = "${lib.getExe alloy-update} notify";
       };
 
       # Let the session user start/stop only those units without a password.

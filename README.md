@@ -115,3 +115,22 @@ tab):
 
 Steam's own scaling filter (FSR 1, NIS, integer, per game) is under
 Performance in the Quick Access menu.
+
+## Updates
+
+`nixos-rebuild switch` applies an update right away, without a reboot.
+Services restart, and the session moves to the new desktop, game and rest
+scripts the next time you change modes.
+
+An update that changes the kernel (the PS5 patches, the Wi-Fi driver, kernel
+parameters) still has to restart into it. Alloy does that with kexec, which
+takes a few seconds and skips the PS5 loader:
+
+- on its own, the next time the console goes into rest mode (it then carries
+  on resting)
+- from the Restart to finish update button in the Alloy panel, or the
+  notification on the desktop
+- with `alloy-update finish`
+
+If the new kernel doesn't reach a working session, the next boot falls back to
+the previous generation, as with any other boot.
