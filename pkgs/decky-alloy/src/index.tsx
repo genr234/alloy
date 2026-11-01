@@ -16,12 +16,14 @@ type Status = {
   autoRest: boolean;
   shutdownWhenDone: boolean;
   boost: boolean | null; // null when boost isn't managed by game mode
+  updatePending: boolean; // an update changed the kernel
 };
 
 const getStatus = callable<[], Status>("get_status");
 const setSetting = callable<[name: string, on: boolean], void>("set_setting");
 const setBoost = callable<[on: boolean], boolean>("set_boost");
 const restNow = callable<[], boolean>("rest_now");
+const finishUpdate = callable<[], boolean>("finish_update");
 const reportDownloads = callable<[pending: number], void>("report_downloads");
 
 // Tells rest mode how many Steam downloads are still to do, so it doesn't
@@ -55,6 +57,23 @@ function Content() {
 
   return (
     <>
+      {status.updatePending && (
+        <PanelSection title="Update">
+          <PanelSectionRow>
+            <ButtonItem
+              layout="below"
+              description="Starts the new kernel in a few seconds and comes back to game mode. Closes the running game."
+              onClick={async () => {
+                if (!(await finishUpdate())) {
+                  toaster.toast({ title: "Alloy", body: "Couldn't restart; reboot to finish the update" });
+                }
+              }}
+            >
+              Restart to finish update
+            </ButtonItem>
+          </PanelSectionRow>
+        </PanelSection>
+      )}
       {status.restEnabled && (
         <PanelSection title="Rest mode">
           <PanelSectionRow>

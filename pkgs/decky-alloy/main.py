@@ -63,6 +63,7 @@ class Plugin:
                 "shutdown-when-done", d.get("shutdownWhenDone", True)
             ),
             "boost": boost,
+            "updatePending": (await run("alloy-update", "status"))[0] == 0,
         }
 
     async def set_setting(self, name, on):
@@ -81,6 +82,10 @@ class Plugin:
 
     async def set_boost(self, on):
         code, _ = await run("systemctl", "start" if on else "stop", BOOST_UNIT)
+        return code == 0
+
+    async def finish_update(self):
+        code, _ = await run("alloy-update", "finish", "game")
         return code == 0
 
     async def rest_now(self):

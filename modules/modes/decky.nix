@@ -58,6 +58,7 @@ in
         flatpak
         systemd
         cfg.packages.alloy-mode
+        cfg.packages.alloy-update
       ];
     };
 

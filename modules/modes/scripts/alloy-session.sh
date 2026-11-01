@@ -4,6 +4,10 @@
 # that was requested with `alloy-mode`, or the default mode if nothing was.
 # So quitting Steam in game mode, for any reason, lands you back on the desktop.
 #
+# After `nixos-rebuild switch`, it hands over to the new system's
+# alloy-session between two modes, so new session scripts apply without a
+# reboot (alloy-update covers kernel changes).
+#
 # Everything it says also goes to the journal (journalctl -t alloy-session), so
 # the boot report can tell which modes ran and how they ended.
 
@@ -15,11 +19,29 @@ say() {
 state="${XDG_STATE_HOME:-$HOME/.local/state}/alloy"
 mkdir -p "$state"
 
-# Every boot starts in the default mode, whatever was requested last time.
-rm -f "$state/next-mode" "$state/end-request" "$state/game-active" "$state/rest-active"
+system="${ALLOY_CURRENT_SYSTEM:-/run/current-system}"
+running="$(readlink -m "$system")"
+
+if [[ "${1:-}" != --reload ]]; then
+  # Every boot starts in the default mode, whatever was requested last time.
+  rm -f "$state/next-mode" "$state/end-request" "$state/game-active" "$state/rest-active"
+  # Unless `alloy-update finish` just restarted into a new kernel and asked
+  # for a mode. Only a fresh request counts: one left by a kexec that never
+  # happened mustn't take over a later boot.
+  if [[ -f "$state/boot-mode" ]] &&
+    (($(date +%s) - $(stat -c %Y "$state/boot-mode") < 600)); then
+    mv "$state/boot-mode" "$state/next-mode"
+  fi
+  rm -f "$state/boot-mode"
+fi
 
 quick_exits=0
 while true; do
+  if [[ "$(readlink -m "$system")" != "$running" && -x "$system/sw/bin/alloy-session" ]]; then
+    say "the system was updated; continuing with its session scripts"
+    exec "$system/sw/bin/alloy-session" --reload
+  fi
+
   mode="$ALLOY_DEFAULT_MODE"
   if [[ -f "$state/next-mode" ]]; then
     mode="$(<"$state/next-mode")"
